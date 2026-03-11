@@ -70,20 +70,15 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 
 ## Setup
 
-### 1. GitHub Packages access (one-time)
+### 1. npm registry setup (one-time)
 
-This package is published to GitHub Packages under the `@degree-as` scope. You need to authenticate once to be able to install it.
-
-**Add to your global `~/.npmrc`:**
+This package is published to GitHub Packages under the `@degree-as` scope. Add the registry to your global `~/.npmrc`:
 
 ```bash
 echo "@degree-as:registry=https://npm.pkg.github.com" >> ~/.npmrc
-echo "//npm.pkg.github.com/:_authToken=YOUR_TOKEN" >> ~/.npmrc
 ```
 
-Replace `YOUR_TOKEN` with a GitHub Personal Access Token that has `read:packages` scope. If you already have a `GITHUB_TOKEN` (e.g. for the GitHub MCP server), you can reuse it - just make sure it includes `read:packages`.
-
-To create a new token: https://github.com/settings/tokens > "Generate new token (classic)" > select `read:packages` > copy the token.
+No authentication token is needed - the package is public.
 
 ### 2. Get a DW API token
 
