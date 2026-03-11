@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "degree-dynamicweb": {
+      "command": "node",
+      "args": ["<path-to>/degree-dynamicweb-mcp/dist/index.js"],
+      "env": {
+        "DW_BASE_URL": "https://localhost:38547",
+        "DW_API_TOKEN": "<your-token-here>"
+      }
+    }
+  }
+}
