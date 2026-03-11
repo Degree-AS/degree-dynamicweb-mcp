@@ -70,12 +70,20 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 
 ## Setup
 
-### 1. Install
+### 1. GitHub Packages access (one-time)
+
+This package is published to GitHub Packages under the `@degree-as` scope. You need to authenticate once to be able to install it.
+
+**Add to your global `~/.npmrc`:**
 
 ```bash
-npm install
-npm run build
+echo "@degree-as:registry=https://npm.pkg.github.com" >> ~/.npmrc
+echo "//npm.pkg.github.com/:_authToken=YOUR_TOKEN" >> ~/.npmrc
 ```
+
+Replace `YOUR_TOKEN` with a GitHub Personal Access Token that has `read:packages` scope. If you already have a `GITHUB_TOKEN` (e.g. for the GitHub MCP server), you can reuse it - just make sure it includes `read:packages`.
+
+To create a new token: https://github.com/settings/tokens > "Generate new token (classic)" > select `read:packages` > copy the token.
 
 ### 2. Get a DW API token
 
@@ -89,8 +97,8 @@ Add to your project's `.mcp.json`:
 {
   "mcpServers": {
     "degree-dynamicweb": {
-      "command": "node",
-      "args": ["<path-to>/degree-dynamicweb-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@degree-as/dynamicweb-mcp"],
       "env": {
         "DW_BASE_URL": "https://localhost:38547",
         "DW_API_TOKEN": "<your-token-here>"
@@ -100,11 +108,29 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-Alternatively, export `DW_API_TOKEN` in `~/.zshrc` and reference it with shell substitution.
+Or set environment variables in `~/.zshrc`:
+
+```bash
+export DW_BASE_URL="https://localhost:38547"
+export DW_API_TOKEN="your-token-here"
+```
 
 ### 4. Restart Claude Code
 
 The MCP server starts automatically when Claude Code loads.
+
+### Local development
+
+If you want to run from source instead of the published package:
+
+```bash
+git clone https://github.com/Degree-AS/degree-dynamicweb-mcp.git
+cd degree-dynamicweb-mcp
+npm install
+npm run build
+```
+
+Then use `"command": "node", "args": ["/path/to/degree-dynamicweb-mcp/dist/index.js"]` in `.mcp.json`.
 
 ## Field Type Aliases
 
