@@ -130,26 +130,51 @@ export class DwClient {
   }
 }
 
-/** Unwrap { model: { data: [...] } } list responses */
+/** Unwrap { Model: { Data: [...] } } list responses (handles both PascalCase and camelCase) */
 export function unwrapList<T>(response: unknown): T[] {
   const r = response as Record<string, unknown>;
-  const model = (r.model ?? r) as Record<string, unknown>;
+  const model = (r.Model ?? r.model ?? r) as Record<string, unknown>;
   if (Array.isArray(model)) return model as T[];
+  if (Array.isArray(model.Data)) return model.Data as T[];
   if (Array.isArray(model.data)) return model.data as T[];
+  if (Array.isArray(r.Data)) return r.Data as T[];
   if (Array.isArray(r.data)) return r.data as T[];
   return [];
 }
 
-/** Unwrap { model: {...} } single item responses */
+/** Unwrap { Model: {...} } single item responses (handles both PascalCase and camelCase) */
 export function unwrapModel<T>(response: unknown): T {
   const r = response as Record<string, unknown>;
-  return ((r.model ?? r) as T);
+  return ((r.Model ?? r.model ?? r) as T);
 }
 
-/** Check response status */
+/** Check response status (handles both command and query response formats) */
 export function checkStatus(response: unknown): { ok: boolean; message: string } {
   const r = response as Record<string, unknown>;
-  const status = (r.status ?? (r.successful ? "ok" : "error")) as string;
-  const message = (r.message ?? r.exception ?? "") as string;
-  return { ok: status === "ok" || r.successful === true, message };
+  const successful = r.Successful ?? r.successful;
+  const status = r.Status ?? r.status;
+  const message = (r.Message ?? r.message ?? r.Exception ?? r.exception ?? "") as string;
+  const ok = successful === true || status === 0 || status === "ok";
+  return { ok, message };
+}
+
+/** Set field values in a DW Groups/Fields item structure (PageItem or ContentItem).
+ *  Handles both camelCase and PascalCase property names from DW API. */
+export function setItemFieldValues(
+  item: Record<string, unknown> | undefined,
+  fields: Record<string, unknown>
+): void {
+  if (!item) return;
+  const groups = (item.groups ?? item.Groups ?? []) as Array<Record<string, unknown>>;
+  for (const group of groups) {
+    const groupFields = (group.fields ?? group.Fields ?? []) as Array<Record<string, unknown>>;
+    for (const field of groupFields) {
+      const sysName = (field.systemName ?? field.SystemName) as string;
+      if (sysName in fields) {
+        // Set both casings to be safe
+        field.value = fields[sysName];
+        field.Value = fields[sysName];
+      }
+    }
+  }
 }

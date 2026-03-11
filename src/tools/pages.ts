@@ -1,36 +1,43 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DwClient, unwrapList, unwrapModel, checkStatus } from "../client.js";
+import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
 import { jsonParam } from "../utils.js";
+
+/** Read a property from a DW object, trying camelCase first then PascalCase */
+function prop(obj: Record<string, unknown>, name: string): unknown {
+  const camel = name.charAt(0).toLowerCase() + name.slice(1);
+  return obj[camel] ?? obj[name];
+}
 
 export function registerPageTools(server: McpServer, client: DwClient): void {
 
   server.registerTool(
     "dw_page_list",
     {
-      description: "List DynamicWeb pages. Optionally filter by areaId (website ID) or parentPageId.",
+      description: "List DynamicWeb pages. Filter by areaId (website ID) or parentPageId.",
       inputSchema: {
         areaId: z.string().optional().describe("Area (website) ID to filter by"),
         parentPageId: z.string().optional().describe("Parent page ID to get child pages"),
       },
     },
     async ({ areaId, parentPageId }) => {
-      const params: Record<string, string> = {};
-      if (areaId) params.AreaId = areaId;
-      if (parentPageId) params.ParentPageId = parentPageId;
-
-      const res = await client.get("PageAll", Object.keys(params).length ? params : undefined);
+      let res: unknown;
+      if (parentPageId) {
+        res = await client.get("GetPagesByParent", { ParentID: parentPageId });
+      } else {
+        res = await client.get("GetPagesByAreaId", areaId ? { AreaId: areaId } : {});
+      }
       const items = unwrapList<Record<string, unknown>>(res);
       const summary = items.map(p => ({
-        id: p.id,
-        parentId: p.parentId,
-        name: p.name,
-        navigationName: p.navigationName,
-        url: p.url,
-        areaId: p.areaId,
-        itemTypeSystemName: p.itemTypeSystemName,
-        published: p.published,
-        childCount: p.childCount,
+        id: prop(p, "Id"),
+        parentPageId: prop(p, "ParentPageId"),
+        name: prop(p, "Name"),
+        metaTitle: prop(p, "MetaTitle"),
+        friendlyUrl: prop(p, "FriendlyUrl"),
+        areaId: prop(p, "AreaId"),
+        itemType: prop(p, "ItemType"),
+        published: prop(p, "Published"),
+        treeSection: prop(p, "TreeSection"),
       }));
       return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
     }
@@ -45,7 +52,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
       },
     },
     async ({ pageId }) => {
-      const res = await client.get("PageById", { Id: pageId });
+      const res = await client.get("GetPageById", { Id: pageId });
       const model = unwrapModel<Record<string, unknown>>(res);
       return { content: [{ type: "text", text: JSON.stringify(model, null, 2) }] };
     }
@@ -56,66 +63,93 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
     {
       description: `Create a new DynamicWeb page under a parent page.
 
-    The page itemType must already exist in DW. Use dw_itemtype_list to find available page item types.
+    Steps: 1) Creates blank page via PageCreate 2) Sets name, item type, publication via PageSave.
     After creating, use dw_page_set_fields to populate item fields.`,
       inputSchema: {
         parentPageId: z.string().describe("Parent page ID"),
+        areaId: z.string().optional().describe("Area ID (auto-detected from parent if omitted)"),
         name: z.string().describe("Internal page name (shown in tree)"),
-        navigationName: z.string().optional().describe("Name shown in navigation menus"),
-        title: z.string().optional().describe("SEO title / browser tab title"),
-        itemTypeSystemName: z.string().optional().describe("Page item type systemName, e.g. 'LandingPage'"),
+        itemType: z.string().describe("Page item type systemName, e.g. 'CaseStudyPage', 'ArticlePage'. Use dw_itemtype_list to find available types."),
         published: z.boolean().optional().default(true),
         showInMenu: z.boolean().optional().default(true),
+        treeSection: z.string().optional().default("Navigation").describe("Tree section: Navigation, Header, or Footer"),
       },
     },
-    async ({ parentPageId, name, navigationName, title, itemTypeSystemName, published, showInMenu }) => {
-      const model: Record<string, unknown> = {
-        ParentPageId: parentPageId,
-        Name: name,
-        NavigationName: navigationName ?? name,
-        Title: title ?? name,
-        Published: published,
-        ShowInMenu: showInMenu,
+    async ({ parentPageId, areaId, name, itemType, published, showInMenu, treeSection }) => {
+      // Step 1: Resolve AreaId if not provided
+      let resolvedAreaId = areaId;
+      if (!resolvedAreaId) {
+        const parentRes = await client.get<Record<string, unknown>>("GetPageById", { Id: parentPageId });
+        const parent = unwrapModel<Record<string, unknown>>(parentRes);
+        resolvedAreaId = String(prop(parent, "AreaId") ?? "1");
+      }
+
+      // Step 2: Create page with item type (command = flat body)
+      const createRes = await client.command<Record<string, unknown>>("PageCreate", {
+        AreaId: Number(resolvedAreaId),
+        ParentId: Number(parentPageId),
+        TreeSection: treeSection,
+        PageType: itemType,
+      });
+
+      const createStatus = checkStatus(createRes);
+      if (!createStatus.ok) throw new Error(`PageCreate failed: ${createStatus.message}`);
+
+      const newPageId = (prop(createRes, "ModelIdentifier")) as string;
+      if (!newPageId) throw new Error("PageCreate did not return ModelIdentifier");
+
+      // Step 3: Fetch the new page to get its full model
+      const getRes = await client.get<Record<string, unknown>>("GetPageById", { Id: newPageId });
+      const pageModel = unwrapModel<Record<string, unknown>>(getRes);
+
+      // Step 4: Set properties (use camelCase matching DW response)
+      pageModel.name = name;
+      pageModel.published = published;
+      pageModel.showInLegend = showInMenu;
+      pageModel.allowclick = true;
+      pageModel.allowsearch = true;
+      pageModel.showInSitemap = true;
+      pageModel.itemType = itemType;
+
+      const saveRes = await client.post<Record<string, unknown>>("PageSave", pageModel);
+      const saveStatus = checkStatus(saveRes);
+      if (!saveStatus.ok) throw new Error(`PageSave failed: ${saveStatus.message}`);
+
+      return {
+        content: [{
+          type: "text",
+          text: `Created page '${name}' (ID: ${newPageId}) under parent ${parentPageId}\n${JSON.stringify({ id: newPageId, name, itemType, published, treeSection }, null, 2)}`,
+        }],
       };
-      if (itemTypeSystemName) model.ItemTypeSystemName = itemTypeSystemName;
-
-      const res = await client.post("PageSave", model);
-      const status = checkStatus(res);
-      if (!status.ok) throw new Error(`Failed to create page: ${status.message}`);
-
-      const created = unwrapModel<Record<string, unknown>>(res);
-      return { content: [{ type: "text", text: `✓ Created page '${name}' (ID: ${created.id ?? "unknown"})\n${JSON.stringify(created, null, 2)}` }] };
     }
   );
 
   server.registerTool(
     "dw_page_set_fields",
     {
-      description: `Set item fields on a DynamicWeb page. Call after creating a page to populate its content.
+      description: `Set item fields on a DynamicWeb page.
 
-    fields is a key-value map where keys are field SystemNames and values are the content.
-    For link fields use { url: "...", pageId: "..." }.
-    For file/image fields use the file path string.`,
+    Fetches the current page, updates field values in its pageItem structure, then saves.
+    fields is a key-value map where keys are field SystemNames and values are the content.`,
       inputSchema: {
         pageId: z.string().describe("Page ID"),
         fields: jsonParam(z.record(z.unknown())).describe("Map of fieldSystemName -> value"),
       },
     },
     async ({ pageId, fields }) => {
-      const model: Record<string, unknown> = {
-        Id: pageId,
-        ...fields,
-      };
+      // Fetch current page
+      const getRes = await client.get<Record<string, unknown>>("GetPageById", { Id: pageId });
+      const pageModel = unwrapModel<Record<string, unknown>>(getRes);
 
-      const res = await client.update(
-        "PageSave",
-        "PageById",
-        { Id: pageId },
-        model
-      );
-      const status = checkStatus(res);
+      // Update field values in pageItem (camelCase from DW API)
+      const pageItem = (pageModel.pageItem ?? pageModel.PageItem) as Record<string, unknown> | undefined;
+      setItemFieldValues(pageItem, fields);
+
+      // Save
+      const saveRes = await client.post<Record<string, unknown>>("PageSave", pageModel);
+      const status = checkStatus(saveRes);
       if (!status.ok) throw new Error(`Failed to update page fields: ${status.message}`);
-      return { content: [{ type: "text", text: `✓ Fields updated on page ${pageId}` }] };
+      return { content: [{ type: "text", text: `Fields updated on page ${pageId}` }] };
     }
   );
 
@@ -126,10 +160,10 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
       inputSchema: { pageId: z.string() },
     },
     async ({ pageId }) => {
-      const res = await client.command("PageDelete", { Id: pageId });
+      const res = await client.command("PageDelete", { Id: Number(pageId) });
       const status = checkStatus(res);
       if (!status.ok) throw new Error(status.message);
-      return { content: [{ type: "text", text: `✓ Deleted page ${pageId}` }] };
+      return { content: [{ type: "text", text: `Deleted page ${pageId}` }] };
     }
   );
 
@@ -139,15 +173,17 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
       description: "List all DynamicWeb areas (websites/channels).",
     },
     async () => {
-      const res = await client.get("AreaAll");
+      const res = await client.get("GetAreas");
       const items = unwrapList<Record<string, unknown>>(res);
       const summary = items.map(a => ({
-        id: a.id,
-        name: a.name,
-        domainLock: a.domainLock,
-        culture: a.culture,
-        defaultLanguage: a.defaultLanguage,
-        rootPageId: a.rootPageId,
+        id: prop(a, "Id"),
+        name: prop(a, "Name"),
+        displayName: prop(a, "DisplayName"),
+        domainLock: prop(a, "DomainLock"),
+        culture: prop(a, "Culture"),
+        cultureCode: prop(a, "CultureCode"),
+        active: prop(a, "Active"),
+        pageCount: prop(a, "PageCount"),
       }));
       return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
     }

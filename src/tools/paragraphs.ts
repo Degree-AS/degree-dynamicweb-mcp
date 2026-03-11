@@ -1,7 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DwClient, unwrapList, unwrapModel, checkStatus } from "../client.js";
+import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
 import { jsonParam } from "../utils.js";
+
+/** Read a property from a DW object, trying camelCase first then PascalCase */
+function prop(obj: Record<string, unknown>, name: string): unknown {
+  const camel = name.charAt(0).toLowerCase() + name.slice(1);
+  return obj[camel] ?? obj[name];
+}
 
 export function registerParagraphTools(server: McpServer, client: DwClient): void {
 
@@ -14,15 +20,17 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
       },
     },
     async ({ pageId }) => {
-      const res = await client.get("ParagraphAll", { PageId: pageId });
+      const res = await client.get("GetParagraphsByPageId", { PageId: pageId });
       const items = unwrapList<Record<string, unknown>>(res);
       const summary = items.map(p => ({
-        id: p.id,
-        pageId: p.pageId,
-        sortOrder: p.sortOrder,
-        itemTypeSystemName: p.itemTypeSystemName,
-        columnId: p.columnId,
-        gridRowId: p.gridRowId,
+        id: prop(p, "ID"),
+        pageId: prop(p, "PageID"),
+        sort: prop(p, "Sort"),
+        itemType: prop(p, "ItemType"),
+        name: prop(p, "Name"),
+        showParagraph: prop(p, "ShowParagraph"),
+        gridRowId: prop(p, "GridRowId"),
+        gridRowColumn: prop(p, "GridRowColumn"),
       }));
       return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
     }
@@ -37,7 +45,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
       },
     },
     async ({ paragraphId }) => {
-      const res = await client.get("ParagraphById", { Id: paragraphId });
+      const res = await client.get("GetParagraphById", { Id: paragraphId });
       const model = unwrapModel<Record<string, unknown>>(res);
       return { content: [{ type: "text", text: JSON.stringify(model, null, 2) }] };
     }
@@ -46,32 +54,38 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_create",
     {
-      description: `Create a new paragraph block on a DynamicWeb page.
+      description: `Create a new paragraph on a DynamicWeb page.
 
-    The paragraph itemType must already exist and be allowed on the page's item type.
+    Creates the paragraph via ParagraphSave with the specified item type.
     Use dw_paragraph_set_fields after creation to populate content fields.
 
-    sortOrder: paragraphs are ordered ascending. Use 100, 200, 300... for easy re-ordering.`,
+    sort: paragraphs are ordered ascending. Use 100, 200, 300... for easy re-ordering.`,
       inputSchema: {
         pageId: z.string().describe("Page ID to add the paragraph to"),
-        itemTypeSystemName: z.string().describe("Paragraph item type systemName, e.g. 'HeroBanner'"),
-        sortOrder: z.number().optional().default(100),
+        itemType: z.string().describe("Paragraph item type systemName, e.g. 'HeroBanner'"),
+        sort: z.number().optional().default(100),
         active: z.boolean().optional().default(true),
       },
     },
-    async ({ pageId, itemTypeSystemName, sortOrder, active }) => {
-      const res = await client.post("ParagraphSave", {
+    async ({ pageId, itemType, sort, active }) => {
+      // Step 1: Get template model from ParagraphNew (has proper dates, contentItem structure)
+      const templateRes = await client.get<Record<string, unknown>>("ParagraphNew", {
         PageId: pageId,
-        ItemTypeSystemName: itemTypeSystemName,
-        SortOrder: sortOrder,
-        Active: active,
+        ParagraphType: itemType,
       });
+      const model = unwrapModel<Record<string, unknown>>(templateRes);
 
+      // Step 2: Set sort and visibility
+      model.sort = sort;
+      model.showParagraph = active;
+
+      // Step 3: Save to create the paragraph
+      const res = await client.post<Record<string, unknown>>("ParagraphSave", model);
       const status = checkStatus(res);
       if (!status.ok) throw new Error(`Failed to create paragraph: ${status.message}`);
 
-      const created = unwrapModel<Record<string, unknown>>(res);
-      return { content: [{ type: "text", text: `✓ Created paragraph '${itemTypeSystemName}' on page ${pageId} (ID: ${created.id ?? "unknown"})\n${JSON.stringify(created, null, 2)}` }] };
+      const newId = prop(res, "ModelIdentifier") as string | undefined;
+      return { content: [{ type: "text", text: `Created paragraph '${itemType}' on page ${pageId} (ID: ${newId ?? "unknown"})` }] };
     }
   );
 
@@ -80,9 +94,9 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
     {
       description: `Set item fields on a DynamicWeb paragraph.
 
+    Fetches the current paragraph, updates field values in its contentItem structure, then saves.
     fields is a key-value map where keys are field SystemNames and values are the content.
     For richtext fields, provide HTML string.
-    For link fields use { url: "...", pageId: "..." }.
     For file/image fields use the file path string (e.g. "/Files/Images/hero.jpg").`,
       inputSchema: {
         paragraphId: z.string().describe("Paragraph ID"),
@@ -90,20 +104,19 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
       },
     },
     async ({ paragraphId, fields }) => {
-      const model: Record<string, unknown> = {
-        Id: paragraphId,
-        ...fields,
-      };
+      // Fetch current paragraph
+      const getRes = await client.get<Record<string, unknown>>("GetParagraphById", { Id: paragraphId });
+      const model = unwrapModel<Record<string, unknown>>(getRes);
 
-      const res = await client.update(
-        "ParagraphSave",
-        "ParagraphById",
-        { Id: paragraphId },
-        model
-      );
-      const status = checkStatus(res);
+      // Update field values in contentItem (camelCase from DW API)
+      const contentItem = (model.contentItem ?? model.ContentItem) as Record<string, unknown> | undefined;
+      setItemFieldValues(contentItem, fields);
+
+      // Save
+      const saveRes = await client.post<Record<string, unknown>>("ParagraphSave", model);
+      const status = checkStatus(saveRes);
       if (!status.ok) throw new Error(`Failed to update paragraph fields: ${status.message}`);
-      return { content: [{ type: "text", text: `✓ Fields updated on paragraph ${paragraphId}` }] };
+      return { content: [{ type: "text", text: `Fields updated on paragraph ${paragraphId}` }] };
     }
   );
 
@@ -114,10 +127,10 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
       inputSchema: { paragraphId: z.string() },
     },
     async ({ paragraphId }) => {
-      const res = await client.command("ParagraphDelete", { Id: paragraphId });
+      const res = await client.command("ParagraphDelete", { Id: Number(paragraphId) });
       const status = checkStatus(res);
       if (!status.ok) throw new Error(status.message);
-      return { content: [{ type: "text", text: `✓ Deleted paragraph ${paragraphId}` }] };
+      return { content: [{ type: "text", text: `Deleted paragraph ${paragraphId}` }] };
     }
   );
 }
