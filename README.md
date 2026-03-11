@@ -45,6 +45,13 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 | `dw_paragraph_set_fields` | Set item field values on a paragraph |
 | `dw_paragraph_delete` | Delete a paragraph |
 
+### Files
+
+| Tool | Description |
+|---|---|
+| `dw_files_list` | List files in a directory, optionally filtered by extension |
+| `dw_files_directories` | List subdirectories |
+
 ### Delivery API (read-only)
 
 | Tool | Description |
@@ -147,8 +154,9 @@ src/
   utils.ts          Shared Zod helpers (jsonParam, numParam)
   tools/
     itemTypes.ts    Item type CRUD, fields, restrictions, settings, editor discovery
-    pages.ts        Page management
-    paragraphs.ts   Paragraph management
+    pages.ts        Page and area management
+    paragraphs.ts   Paragraph management (uses ParagraphNew + ParagraphSave)
+    files.ts        File and directory browsing
     delivery.ts     Read-only Delivery API
     discovery.ts    Swagger search, endpoint schema, raw API calls
 ```
