@@ -127,7 +127,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
       inputSchema: { paragraphId: z.string() },
     },
     async ({ paragraphId }) => {
-      const res = await client.command("ParagraphDelete", { Id: Number(paragraphId) });
+      const res = await client.command("ParagraphDelete", { Ids: [String(paragraphId)] });
       const status = checkStatus(res);
       if (!status.ok) throw new Error(status.message);
       return { content: [{ type: "text", text: `Deleted paragraph ${paragraphId}` }] };
