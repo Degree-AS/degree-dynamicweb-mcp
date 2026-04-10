@@ -1,13 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
-import { jsonParam } from "../utils.js";
-
-/** Read a property from a DW object, trying camelCase first then PascalCase */
-function prop(obj: Record<string, unknown>, name: string): unknown {
-  const camel = name.charAt(0).toLowerCase() + name.slice(1);
-  return obj[camel] ?? obj[name];
-}
+import { jsonParam, prop } from "../utils.js";
 
 export function registerParagraphTools(server: McpServer, client: DwClient): void {
 

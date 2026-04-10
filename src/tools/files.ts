@@ -1,12 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { DwClient, unwrapList, unwrapModel } from "../client.js";
-
-/** Read a property from a DW object, trying camelCase first then PascalCase */
-function prop(obj: Record<string, unknown>, name: string): unknown {
-  const camel = name.charAt(0).toLowerCase() + name.slice(1);
-  return obj[camel] ?? obj[name];
-}
+import { prop } from "../utils.js";
 
 export function registerFileTools(server: McpServer, client: DwClient): void {
 

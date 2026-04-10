@@ -59,7 +59,7 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
       const kw = keyword.toLowerCase();
       const matches: Array<{ path: string; method: string; summary: string; operationId: string }> = [];
 
-      for (const [path, methods] of Object.entries(paths)) {
+      outer: for (const [path, methods] of Object.entries(paths)) {
         for (const [method, op] of Object.entries(methods)) {
           if (!["get", "post", "put", "delete", "patch"].includes(method)) continue;
           const operation = op as Record<string, unknown>;
@@ -76,9 +76,8 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
             matches.push({ path, method: method.toUpperCase(), summary, operationId });
           }
 
-          if (matches.length >= maxResults) break;
+          if (matches.length >= maxResults) break outer;
         }
-        if (matches.length >= maxResults) break;
       }
 
       if (matches.length === 0) {

@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** Read a property from a DW object, trying camelCase first then PascalCase */
+export function prop(obj: Record<string, unknown>, name: string): unknown {
+  const camel = name.charAt(0).toLowerCase() + name.slice(1);
+  return obj[camel] ?? obj[name];
+}
+
 /**
  * Wraps a Zod schema with a JSON string preprocessor.
  *

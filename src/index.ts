@@ -21,6 +21,9 @@ if (!token || token.startsWith("{")) {
 // Disable TLS verification for local DW with self-signed cert
 if (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")) {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  process.stderr.write(
+    "[degree-dynamicweb-mcp] TLS verification disabled for localhost.\n"
+  );
 }
 
 const config: DwConfig = { baseUrl, token };
@@ -28,7 +31,7 @@ const dwClient = new DwClient(config);
 
 const server = new McpServer({
   name: "degree-dynamicweb",
-  version: "1.0.0",
+  version: "1.1.0",
 });
 
 registerItemTypeTools(server, dwClient);

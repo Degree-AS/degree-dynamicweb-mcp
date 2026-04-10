@@ -1,6 +1,6 @@
 {
   "name": "@degree-as/dynamicweb-mcp",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "MCP server for DynamicWeb 10 Admin API",
   "type": "module",
   "main": "dist/index.js",
@@ -17,11 +17,22 @@
     "type": "git",
     "url": "https://github.com/Degree-AS/degree-dynamicweb-mcp.git"
   },
+  "homepage": "https://github.com/Degree-AS/degree-dynamicweb-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Degree-AS/degree-dynamicweb-mcp/issues"
+  },
+  "license": "MIT",
+  "author": "Degree AS",
+  "keywords": ["mcp", "dynamicweb", "cms", "model-context-protocol", "headless-cms"],
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
+    "registry": "https://registry.npmjs.org",
     "access": "public"
   },
   "dependencies": {
