@@ -70,21 +70,11 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 
 ## Setup
 
-### 1. npm registry setup (one-time)
-
-This package is published to GitHub Packages under the `@degree-as` scope. Add the registry to your global `~/.npmrc`:
-
-```bash
-echo "@degree-as:registry=https://npm.pkg.github.com" >> ~/.npmrc
-```
-
-No authentication token is needed - the package is public.
-
-### 2. Get a DW API token
+### 1. Get a DW API token
 
 In DynamicWeb Admin, go to **Settings > Developer > API Keys** and create a new key with full access.
 
-### 3. Configure your AI client
+### 2. Configure your AI client
 
 <details>
 <summary><b>Claude Code</b></summary>
@@ -261,7 +251,7 @@ mcpServers:
 
 </details>
 
-### 4. Restart your client
+### 3. Restart your client
 
 The MCP server starts automatically when your AI client loads.
 
