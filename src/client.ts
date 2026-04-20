@@ -53,9 +53,18 @@ export class DwClient {
   }
 
   /** POST /admin/api/{endpoint} — flat body (no Model wrapper). Used by delete commands. */
-  async command<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
-    const url = `${this.config.baseUrl}/admin/api/${endpoint}`;
-    return this.request<T>(url, {
+  async command<T>(
+    endpoint: string,
+    body: Record<string, unknown>,
+    params?: Record<string, string>
+  ): Promise<T> {
+    const url = new URL(`${this.config.baseUrl}/admin/api/${endpoint}`);
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.set(key, value);
+      }
+    }
+    return this.request<T>(url.toString(), {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -63,18 +72,19 @@ export class DwClient {
 
   /**
    * POST /Admin/Api/{endpoint}?Query.Type={queryType} — updates existing records
-   * Body: { QueryData: { SystemName: "..." }, model: {...} }
+   * Body: { ...extraFields, QueryData: { SystemName: "..." }, model: {...} }
    */
   async update<T>(
     endpoint: string,
     queryType: string,
     queryData: Record<string, unknown>,
-    model: Record<string, unknown>
+    model: Record<string, unknown>,
+    extraFields?: Record<string, unknown>
   ): Promise<T> {
     const url = `${this.config.baseUrl}/Admin/Api/${endpoint}?Query.Type=${queryType}`;
     return this.request<T>(url, {
       method: "POST",
-      body: JSON.stringify({ QueryData: queryData, model }),
+      body: JSON.stringify({ ...(extraFields ?? {}), QueryData: queryData, model }),
     });
   }
 

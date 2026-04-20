@@ -130,20 +130,32 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
     "dw_api_call",
     {
       description: `Make a raw call to any DynamicWeb Admin API endpoint.
-    Use this for endpoints not covered by specific tools.
     For GET: provide params as query params.
-    For POST: provide model as the request body Model.`,
+    For POST: choose bodyMode.
+      - 'model' (default) — wraps your model in {"Model": ...}. Used by most Save endpoints that create new records.
+      - 'raw'   — sends your model as the top-level body (no wrapper). Used by delete-style commands (e.g. ProductDelete, ItemTypeDelete). Supports params in the URL.
+      - 'update' — sends {RunUpdateIndex?, QueryData, model} and appends ?Query.Type=queryType. Used to UPDATE existing records via screen commands (e.g. ProductSave).
+    For update mode: pass queryType (e.g. 'ProductById'), queryData (identifies the record: {Id, LanguageId, QueryContext:{screenTypeName:'ProductEdit'}}), and optionally extraFields (e.g. {RunUpdateIndex:true}).`,
       inputSchema: {
         endpoint: z.string().describe("Endpoint name without leading slash, e.g. 'NavigationAll'"),
         method: z.enum(["GET", "POST"]).optional().default("GET"),
-        params: jsonParam(z.record(z.string()).optional()).describe("Query parameters for GET requests"),
-        model: jsonParam(z.record(z.unknown()).optional()).describe("Body model for POST requests"),
+        params: jsonParam(z.record(z.string()).optional()).describe("Query parameters (used by GET and POST-raw)"),
+        model: jsonParam(z.record(z.unknown()).optional()).describe("Body for POST"),
+        bodyMode: z.enum(["model", "raw", "update"]).optional().default("model").describe("How to wrap the body: 'model' | 'raw' | 'update'"),
+        queryType: z.string().optional().describe("Required for bodyMode='update'. E.g. 'ProductById', 'ProductsAll'"),
+        queryData: jsonParam(z.record(z.unknown()).optional()).describe("Required for bodyMode='update'. Identifies the record, e.g. {Id:'PROD1', LanguageId:'LANG1', QueryContext:{screenTypeName:'ProductEdit'}}"),
+        extraFields: jsonParam(z.record(z.unknown()).optional()).describe("Extra top-level body fields for bodyMode='update' (e.g. {RunUpdateIndex:true})"),
       },
     },
-    async ({ endpoint, method, params, model }) => {
+    async ({ endpoint, method, params, model, bodyMode, queryType, queryData, extraFields }) => {
       let res: unknown;
       if (method === "GET") {
         res = await client.get(endpoint, params);
+      } else if (bodyMode === "update") {
+        if (!queryType) throw new Error("bodyMode='update' requires queryType, e.g. 'ProductById'");
+        res = await client.update(endpoint, queryType, queryData ?? {}, model ?? {}, extraFields);
+      } else if (bodyMode === "raw") {
+        res = await client.command(endpoint, model ?? {}, params);
       } else {
         res = await client.post(endpoint, model ?? {});
       }
