@@ -45,6 +45,36 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 | `dw_paragraph_set_fields` | Set item field values on a paragraph |
 | `dw_paragraph_delete`     | Delete a paragraph                   |
 
+### Products
+
+| Tool                      | Description                                                                |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `dw_product_list`         | List products, optionally filtered by group or search                      |
+| `dw_product_get`          | Get a single product (full model incl. CustomFields/CategoryFields)        |
+| `dw_product_update`       | Update top-level fields, customFields, and categoryFields on a product     |
+| `dw_product_delete`       | Delete one or more products                                                |
+| `dw_product_bulk_discount`| Apply a percentage discount to DefaultPrice across a group or product list |
+
+`dw_product_update` accepts three input maps:
+
+- `fields` - top-level product fields (Name, DefaultPrice, Stock, etc.)
+- `customFields` - global product custom field values, keyed by SystemName
+- `categoryFields` - product category field values, keyed by SystemName
+
+### Product Schema
+
+Manage the PIM data model: product categories (groups of attributes) and product fields (the attributes themselves).
+
+| Tool                          | Description                                                       |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `dw_product_field_type_list`  | List the 15 product field types (TypeId + aliases)                |
+| `dw_product_category_list`    | List product categories                                           |
+| `dw_product_category_save`    | Create or update a product category                               |
+| `dw_product_category_delete`  | Delete categories (3-step DW workflow handled internally)         |
+| `dw_product_field_list`       | List fields belonging to a category                               |
+| `dw_product_field_save`       | Create or update a field on a category (accepts type aliases)     |
+| `dw_product_field_delete`     | Delete fields from a single category                              |
+
 ### Files
 
 | Tool                   | Description                                                 |
@@ -270,6 +300,8 @@ Then use `"command": "node", "args": ["/path/to/degree-dynamicweb-mcp/dist/index
 
 ## Field Type Aliases
 
+### Item type fields (`dw_field_save`, `dw_itemtype_create`)
+
 When creating fields, you can use short aliases instead of full .NET class names:
 
 | Alias            | Editor                 |
@@ -307,17 +339,43 @@ When creating fields, you can use short aliases instead of full .NET class names
 
 Any full .NET editor class name is also accepted. Use `dw_field_types` to discover all available editors from your DW instance.
 
+### Product fields (`dw_product_field_save`)
+
+Product fields use a different system - integer `TypeId` from `FieldTypeAll`, not editor class names:
+
+| Alias                | TypeId | Name        |
+| -------------------- | ------ | ----------- |
+| `text` / `text255`   | 1      | Text (255)  |
+| `longtext`           | 2      | Long text   |
+| `checkbox`           | 3      | Checkbox    |
+| `date`               | 4      | Date        |
+| `datetime`           | 5      | Date/Time   |
+| `number` / `integer` | 6      | Integer     |
+| `decimal`            | 7      | Decimal     |
+| `link`               | 8      | Link        |
+| `file`               | 9      | File        |
+| `text100`            | 10     | Text (100)  |
+| `text50`             | 11     | Text (50)   |
+| `text20`             | 12     | Text (20)   |
+| `text5`              | 13     | Text (5)    |
+| `richtext` / `editor`| 14     | Editor      |
+| `list` / `dropdown`  | 15     | List        |
+
+Numeric TypeId is also accepted directly. Use `dw_product_field_type_list` to fetch the live list from your DW instance.
+
 ## Architecture
 
 ```
 src/
   index.ts          Entry point - reads config from env, registers tools
   client.ts         DwClient - HTTP client for Admin API, Update API, Delivery API
-  utils.ts          Shared Zod helpers (jsonParam, numParam)
+  utils.ts          Shared Zod helpers (jsonParam, numParam) and string helpers (pascal)
   tools/
     itemTypes.ts    Item type CRUD, fields, restrictions, settings, editor discovery
     pages.ts        Page and area management
     paragraphs.ts   Paragraph management (uses ParagraphNew + ParagraphSave)
+    products.ts     Product CRUD, bulk discount, custom/category field value updates
+    productSchema.ts Product categories and product field schema management
     files.ts        File and directory browsing
     delivery.ts     Read-only Delivery API
     discovery.ts    Swagger search, endpoint schema, raw API calls

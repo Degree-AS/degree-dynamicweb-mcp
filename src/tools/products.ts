@@ -1,11 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DwClient, unwrapModel, checkStatus } from "../client.js";
-import { jsonParam, numParam, prop } from "../utils.js";
+import { DwClient, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
+import { jsonParam, numParam, pascal, prop } from "../utils.js";
 
 // Top-level product fields the ProductSave command accepts (PascalCase).
 // Mirrors the body that the DW admin UI sends when saving a product edit.
-// CustomFields/CategoryFields/computed props are intentionally omitted.
 const SAVE_FIELDS = [
   "Name", "Number", "ManufacturerId", "EAN", "Active", "WorkflowStateId",
   "ShortDescription", "LongDescription",
@@ -17,11 +16,8 @@ const SAVE_FIELDS = [
   "MetaTitle", "MetaKeywords", "MetaDescription", "MetaUrl", "MetaCanonical",
 ] as const;
 
-function pascal(key: string): string {
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
-/** Build a ProductSave body from a fetched product model, overlaying updates. */
+/** Build a ProductSave body from a fetched product model, overlaying updates.
+ *  CustomFields/CategoryFields are passed through as-is so caller can mutate Field.Value via setItemFieldValues. */
 function buildSaveModel(
   current: Record<string, unknown>,
   updates: Record<string, unknown>
@@ -31,6 +27,10 @@ function buildSaveModel(
     const val = prop(current, field);
     out[field] = val ?? "";
   }
+  const customFields = prop(current, "CustomFields");
+  const categoryFields = prop(current, "CategoryFields");
+  if (customFields) out.CustomFields = customFields;
+  if (categoryFields) out.CategoryFields = categoryFields;
   for (const [key, value] of Object.entries(updates)) {
     out[pascal(key)] = value;
   }
@@ -132,19 +132,31 @@ Returns id, number, name, defaultPrice, stock, active. Use pagingSize to control
     {
       description: `Update fields on an existing DynamicWeb product.
 Fetches the current product, overlays your field updates, and saves via ProductSave (update mode, Query.Type=ProductById).
-Pass 'fields' as a map of field names (PascalCase or camelCase) to new values.
-Common fields: Name, Number, DefaultPrice, Cost, Stock, Active, ManufacturerId, ShortDescription, LongDescription, MetaTitle.`,
+
+- 'fields': top-level product fields (Name, DefaultPrice, Stock, Active, etc.) - PascalCase or camelCase.
+- 'customFields': global product custom fields, keyed by SystemName (e.g. {Color: "red"}).
+- 'categoryFields': product category fields, keyed by SystemName.
+
+Manage the schema of customFields/categoryFields via dw_product_field_save / dw_product_category_save.`,
       inputSchema: {
         id: z.string().describe("Product ID, e.g. 'PROD1'"),
         languageId: z.string().optional().default("LANG1"),
         variantId: z.string().optional().default(""),
-        fields: jsonParam(z.record(z.unknown())).describe("Fields to update, e.g. {DefaultPrice: 99.99, Stock: 42}"),
+        fields: jsonParam(z.record(z.unknown()).optional().default({})).describe("Top-level fields, e.g. {DefaultPrice: 99.99, Stock: 42}"),
+        customFields: jsonParam(z.record(z.unknown()).optional().default({})).describe("Custom field values keyed by SystemName, e.g. {Color: 'red', BatteryLife: 8}"),
+        categoryFields: jsonParam(z.record(z.unknown()).optional().default({})).describe("Category field values keyed by SystemName"),
         runUpdateIndex: z.boolean().optional().default(true),
       },
     },
-    async ({ id, languageId, variantId, fields, runUpdateIndex }) => {
+    async ({ id, languageId, variantId, fields, customFields, categoryFields, runUpdateIndex }) => {
       const current = await fetchProduct(client, id, languageId ?? "LANG1", variantId ?? "");
       const saveModel = buildSaveModel(current, fields);
+      if (Object.keys(customFields).length > 0) {
+        setItemFieldValues(saveModel.CustomFields as Record<string, unknown>, customFields);
+      }
+      if (Object.keys(categoryFields).length > 0) {
+        setItemFieldValues(saveModel.CategoryFields as Record<string, unknown>, categoryFields);
+      }
       const res = await saveProduct(client, id, languageId ?? "LANG1", saveModel, runUpdateIndex);
       const status = checkStatus(res);
       if (!status.ok) throw new Error(`ProductSave failed: ${status.message}`);

@@ -9,6 +9,7 @@ import { registerDeliveryTools } from "./tools/delivery.js";
 import { registerDiscoveryTools } from "./tools/discovery.js";
 import { registerFileTools } from "./tools/files.js";
 import { registerProductTools } from "./tools/products.js";
+import { registerProductSchemaTools } from "./tools/productSchema.js";
 
 const baseUrl = process.env.DW_BASE_URL ?? "https://localhost:38547";
 const token = process.env.DW_API_TOKEN ?? "";
@@ -32,7 +33,7 @@ const dwClient = new DwClient(config);
 
 const server = new McpServer({
   name: "degree-dynamicweb",
-  version: "1.2.0",
+  version: "1.3.0",
 });
 
 registerItemTypeTools(server, dwClient);
@@ -42,6 +43,7 @@ registerDeliveryTools(server, dwClient);
 registerDiscoveryTools(server, dwClient);
 registerFileTools(server, dwClient);
 registerProductTools(server, dwClient);
+registerProductSchemaTools(server, dwClient);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

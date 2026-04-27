@@ -6,6 +6,11 @@ export function prop(obj: Record<string, unknown>, name: string): unknown {
   return obj[camel] ?? obj[name];
 }
 
+/** Convert a key to PascalCase (first letter uppercase). */
+export function pascal(key: string): string {
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 /**
  * Wraps a Zod schema with a JSON string preprocessor.
  *
