@@ -62,8 +62,51 @@ const UNDERLYING_TYPES: Record<string, string> = {
   decimal: "System.Decimal, System.Private.CoreLib",
   date: "System.DateTime, System.Private.CoreLib",
   datetime: "System.DateTime, System.Private.CoreLib",
+  itemrelation: "System.Int32, System.Private.CoreLib",
 };
 const DEFAULT_UNDERLYING_TYPE = "System.String, System.Private.CoreLib";
+
+const ITEM_RELATION_ADDIN = "Dynamicweb.Content.Items.Editors.ItemRelationListEditor";
+
+/**
+ * Build the EditorConfiguration XML + EditorFields model an `itemrelation`
+ * (ItemRelationListEditor) field requires — without it the DW API rejects the
+ * field ("Item type"/"Item source" required). `itemType` is the child item
+ * type systemName the list holds; `itemSource` defaults to CurrentParagraph
+ * (rows stored on the owning paragraph). Mirrors how Swift/degree configure it.
+ */
+function buildItemRelationConfig(itemType: string, itemSource = "CurrentParagraph") {
+  const params: [string, string][] = [
+    ["Item type", itemType],
+    ["Sort by", ""],
+    ["Sort order", ""],
+    ["Item source", itemSource],
+    ["Minumum number of items", ""],
+    ["Maximum number of items", ""],
+  ];
+  const editorConfiguration =
+    `<Parameters addin="${ITEM_RELATION_ADDIN}">` +
+    params
+      .map(([name, value]) => `<Parameter addin="${ITEM_RELATION_ADDIN}" name="${name}" value="${value}" />`)
+      .join("") +
+    `</Parameters>`;
+  const editorFields = {
+    Groups: [
+      {
+        Name: "General",
+        SystemName: "General",
+        Collapsed: false,
+        Fields: params.map(([name, value]) => ({
+          Name: name,
+          SystemName: name,
+          Value: value,
+          TypeName: DEFAULT_UNDERLYING_TYPE,
+        })),
+      },
+    ],
+  };
+  return { editorConfiguration, editorFields };
+}
 
 /** Resolve a type alias or full editorType string to the full .NET class name */
 function resolveEditorType(type: string): string {
@@ -88,10 +131,14 @@ const fieldSchema = z.object({
   name: z.string().describe("Display name, e.g. 'Heading'"),
   systemName: z.string().describe("PascalCase key, e.g. 'Heading'. Must match frontend getFieldString() calls."),
   type: z.string()
-    .describe("Short alias (text, longtext, richtext, file, image, link, itemlink, media, checkbox, number, dropdown) or full .NET editor class name. Use dw_field_types to discover available types."),
+    .describe("Short alias (text, longtext, richtext, file, image, link, itemlink, itemrelation, media, checkbox, number, dropdown) or full .NET editor class name. Use dw_field_types to discover available types."),
   required: z.boolean().optional().default(false),
   group: z.string().min(1).optional().default("General")
     .describe("Field group systemName. Default: 'General'. Use to organize fields into collapsible sections in DW Admin."),
+  itemRelationType: z.string().optional()
+    .describe("REQUIRED for type=itemrelation: the child item type systemName the repeatable list holds, e.g. 'OpeningHoursRow'. Create that child item type first."),
+  itemSource: z.string().optional().default("CurrentParagraph")
+    .describe("For type=itemrelation: where list items live. Default 'CurrentParagraph' (rows stored on the owning paragraph)."),
 });
 
 const restrictionsSchema = z.object({
@@ -219,20 +266,33 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
       // Step 3: Add fields
       for (const field of fields) {
         const editorType = resolveEditorType(field.type);
-        const underlyingType = resolveUnderlyingType(field.type);
-        const editorConfig = resolveEditorConfig(editorType);
+        const isItemRelation = editorType.includes("ItemRelationListEditor");
 
-        const fieldRes = await client.post("ItemFieldSave", {
+        if (isItemRelation && !field.itemRelationType) {
+          results.push(`✗ Field '${field.systemName}': itemRelationType (child item type) is required for itemrelation fields`);
+          continue;
+        }
+
+        const body: Record<string, unknown> = {
           ItemTypeSystemName: systemName,
           IsNew: true,
           Name: field.name,
           SystemName: field.systemName,
-          UnderlyingType: underlyingType,
+          UnderlyingType: isItemRelation
+            ? "System.Int32, System.Private.CoreLib"
+            : resolveUnderlyingType(field.type),
           EditorType: editorType,
-          EditorConfiguration: editorConfig,
+          EditorConfiguration: resolveEditorConfig(editorType),
           Required: field.required ?? false,
           ItemFieldGroupSystemName: field.group ?? "General",
-        });
+        };
+        if (isItemRelation) {
+          const cfg = buildItemRelationConfig(field.itemRelationType!, field.itemSource);
+          body.EditorConfiguration = cfg.editorConfiguration;
+          body.EditorFields = cfg.editorFields;
+        }
+
+        const fieldRes = await client.post("ItemFieldSave", body);
 
         const fieldStatus = checkStatus(fieldRes);
         if (!fieldStatus.ok) {
@@ -466,24 +526,39 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
         required: z.boolean().optional().default(false),
         group: z.string().optional().default("General")
           .describe("Field group systemName. Default: 'General'."),
+        itemRelationType: z.string().optional()
+          .describe("REQUIRED for type=itemrelation: the child item type systemName the repeatable list holds. Create that child item type first."),
+        itemSource: z.string().optional().default("CurrentParagraph")
+          .describe("For type=itemrelation: where list items live. Default 'CurrentParagraph'."),
       },
     },
-    async ({ itemTypeSystemName, name, systemName, type, isNew, required, group }) => {
+    async ({ itemTypeSystemName, name, systemName, type, isNew, required, group, itemRelationType, itemSource }) => {
       const editorType = resolveEditorType(type);
-      const underlyingType = resolveUnderlyingType(type);
-      const editorConfig = resolveEditorConfig(editorType);
+      const isItemRelation = editorType.includes("ItemRelationListEditor");
+      if (isItemRelation && !itemRelationType) {
+        throw new Error("itemRelationType (the child item type systemName) is required for itemrelation fields");
+      }
 
-      const res = await client.post("ItemFieldSave", {
+      const body: Record<string, unknown> = {
         ItemTypeSystemName: itemTypeSystemName,
         IsNew: isNew,
         Name: name,
         SystemName: systemName,
-        UnderlyingType: underlyingType,
+        UnderlyingType: isItemRelation
+          ? "System.Int32, System.Private.CoreLib"
+          : resolveUnderlyingType(type),
         EditorType: editorType,
-        EditorConfiguration: editorConfig,
+        EditorConfiguration: resolveEditorConfig(editorType),
         Required: required,
         ItemFieldGroupSystemName: group,
-      });
+      };
+      if (isItemRelation) {
+        const cfg = buildItemRelationConfig(itemRelationType!, itemSource);
+        body.EditorConfiguration = cfg.editorConfiguration;
+        body.EditorFields = cfg.editorFields;
+      }
+
+      const res = await client.post("ItemFieldSave", body);
 
       const status = checkStatus(res);
       if (!status.ok) throw new Error(status.message);
