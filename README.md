@@ -339,6 +339,32 @@ When creating fields, you can use short aliases instead of full .NET class names
 
 Any full .NET editor class name is also accepted. Use `dw_field_types` to discover all available editors from your DW instance.
 
+#### Repeatable lists (`itemrelation`)
+
+`itemrelation` (ItemRelationListEditor) creates a **repeatable list of child items** — the generic way to model FAQ items, rows, persons, etc. (instead of fixed numbered slots like `Question1..5`). It needs two extra params:
+
+| Param              | Required | Description                                                              |
+| ------------------ | -------- | ------------------------------------------------------------------------ |
+| `itemRelationType` | yes      | systemName of the **child item type** the list holds. Create it first.   |
+| `itemSource`       | no       | where items live. Default `CurrentParagraph` (rows stored on the owner). |
+
+Create the child item type first, then the parent:
+
+```jsonc
+// 1) child row
+dw_itemtype_create { systemName: "OpeningHoursRow", fields: [
+  { name: "Label", systemName: "Label", type: "text" },
+  { name: "Value", systemName: "Value", type: "text" },
+]}
+// 2) parent with the repeatable list
+dw_itemtype_create { systemName: "OpeningHours", fields: [
+  { name: "Title", systemName: "Title", type: "text" },
+  { name: "Rows",  systemName: "Rows",  type: "itemrelation", itemRelationType: "OpeningHoursRow" },
+]}
+```
+
+The tool emits the required `EditorConfiguration` + `EditorFields` (Item type / Item source) and the `Int32` underlying type automatically.
+
 ### Product fields (`dw_product_field_save`)
 
 Product fields use a different system - integer `TypeId` from `FieldTypeAll`, not editor class names:
