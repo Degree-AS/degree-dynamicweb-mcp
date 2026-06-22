@@ -56,39 +56,76 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
       const spec = await fetchSwagger(client);
 
       const paths = (spec.paths ?? {}) as Record<string, Record<string, unknown>>;
-      const kw = keyword.toLowerCase();
-      const matches: Array<{ path: string; method: string; summary: string; operationId: string }> = [];
+      // Space-separated terms are ANDed (every term must match somewhere), so
+      // "user save" narrows to endpoints matching both — much more precise than
+      // a single broad term.
+      const terms = keyword.toLowerCase().trim().split(/\s+/).filter(Boolean);
 
-      outer: for (const [path, methods] of Object.entries(paths)) {
+      type Hit = { path: string; method: string; summary: string; operationId: string; score: number };
+      const matches: Hit[] = [];
+
+      // Score where each term hits: exact basename/operationId beats substring
+      // beats path beats summary beats tags. Sum across terms. This ranks the
+      // strongest matches first instead of returning spec-order (where generic
+      // product endpoints crowd out user/group commands).
+      const scoreTerm = (t: string, base: string, lop: string, lpath: string, lsum: string, ltags: string): number => {
+        if (base === t || lop === t || lop === `${t}command` || lop === `${t}query`) return 100;
+        if (base.includes(t) || lop.includes(t)) return 70;
+        if (lpath.includes(t)) return 50;
+        if (lsum.includes(t)) return 30;
+        if (ltags.includes(t)) return 10;
+        return 0;
+      };
+
+      for (const [path, methods] of Object.entries(paths)) {
         for (const [method, op] of Object.entries(methods)) {
           if (!["get", "post", "put", "delete", "patch"].includes(method)) continue;
           const operation = op as Record<string, unknown>;
           const summary = String(operation.summary ?? "");
           const operationId = String(operation.operationId ?? "");
-          const tags = (operation.tags as string[] ?? []).join(" ");
+          const tags = ((operation.tags as string[]) ?? []).join(" ");
 
-          if (
-            path.toLowerCase().includes(kw) ||
-            summary.toLowerCase().includes(kw) ||
-            operationId.toLowerCase().includes(kw) ||
-            tags.toLowerCase().includes(kw)
-          ) {
-            matches.push({ path, method: method.toUpperCase(), summary, operationId });
+          const lpath = path.toLowerCase();
+          const lop = operationId.toLowerCase();
+          const lsum = summary.toLowerCase();
+          const ltags = tags.toLowerCase();
+          const base = lpath.split("/").filter(Boolean).pop() ?? "";
+
+          let score = 0;
+          let allMatch = true;
+          for (const t of terms) {
+            const s = scoreTerm(t, base, lop, lpath, lsum, ltags);
+            if (s === 0) {
+              allMatch = false;
+              break;
+            }
+            score += s;
           }
 
-          if (matches.length >= maxResults) break outer;
+          if (allMatch && score > 0) {
+            matches.push({ path, method: method.toUpperCase(), summary, operationId, score });
+          }
         }
       }
 
       if (matches.length === 0) {
-        return { content: [{ type: "text", text: `No endpoints found matching '${keyword}'` }] };
+        return { content: [{ type: "text", text: `No endpoints found matching '${keyword}'. Try fewer/broader terms, or a single keyword.` }] };
       }
 
-      const text = matches
+      matches.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+      const total = matches.length;
+      const shown = matches.slice(0, maxResults);
+
+      const text = shown
         .map(m => `${m.method} ${m.path}\n  Summary: ${m.summary}\n  OperationId: ${m.operationId}`)
         .join("\n\n");
 
-      return { content: [{ type: "text", text: `Found ${matches.length} endpoints for '${keyword}':\n\n${text}` }] };
+      const more =
+        total > shown.length
+          ? `\n\n…and ${total - shown.length} more lower-ranked match(es). Add another term to narrow (terms are ANDed), or raise maxResults.`
+          : "";
+
+      return { content: [{ type: "text", text: `Found ${total} endpoint(s) for '${keyword}' (showing ${shown.length}, best matches first):\n\n${text}${more}` }] };
     }
   );
 

@@ -1,6 +1,6 @@
 {
   "name": "@degree-as/dynamicweb-mcp",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "MCP server for DynamicWeb 10 Admin API",
   "type": "module",
   "main": "dist/index.js",
@@ -23,7 +23,13 @@
   },
   "license": "MIT",
   "author": "Degree AS",
-  "keywords": ["mcp", "dynamicweb", "cms", "model-context-protocol", "headless-cms"],
+  "keywords": [
+    "mcp",
+    "dynamicweb",
+    "cms",
+    "model-context-protocol",
+    "headless-cms"
+  ],
   "engines": {
     "node": ">=18"
   },
