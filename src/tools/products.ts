@@ -49,6 +49,16 @@ async function fetchProduct(
   return unwrapModel<Record<string, unknown>>(res);
 }
 
+/**
+ * DW's ProductById query returns a 400 "Unable to load query parameters for query type: 'ProductById'"
+ * when no product matches the given id/language/variant (rather than an empty result). Treat that
+ * specific error as "not found" so callers get a clean answer instead of a raw API error.
+ */
+function isProductNotFound(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("Unable to load query parameters for query type: 'ProductById'");
+}
+
 async function saveProduct(
   client: DwClient,
   id: string,
@@ -122,8 +132,21 @@ Returns id, number, name, defaultPrice, stock, active. Use pagingSize to control
       },
     },
     async ({ id, languageId, variantId }) => {
-      const model = await fetchProduct(client, id, languageId ?? "LANG1", variantId ?? "");
-      return { content: [{ type: "text", text: JSON.stringify(model, null, 2) }] };
+      const lang = languageId ?? "LANG1";
+      const variant = variantId ?? "";
+      try {
+        const model = await fetchProduct(client, id, lang, variant);
+        return { content: [{ type: "text", text: JSON.stringify(model, null, 2) }] };
+      } catch (err) {
+        if (isProductNotFound(err)) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            found: false,
+            id, languageId: lang, variantId: variant,
+            message: `Product '${id}' not found for language '${lang}'${variant ? ` variant '${variant}'` : ""}.`,
+          }, null, 2) }] };
+        }
+        throw err;
+      }
     }
   );
 
