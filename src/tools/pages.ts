@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
+import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues, readItemFieldValues } from "../client.js";
 import { jsonParam, prop } from "../utils.js";
 
 export function registerPageTools(server: McpServer, client: DwClient): void {
@@ -123,8 +123,12 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
     {
       description: `Set item fields on a DynamicWeb page.
 
-    Fetches the current page, updates field values in its pageItem structure, then saves.
-    fields is a key-value map where keys are field SystemNames and values are the content.`,
+    Fetches the current page, updates field values in its pageItem structure, saves, then reads the
+    page back and reports what it now holds — so a write that did not land is visible instead of
+    being reported as success.
+
+    fields is a key-value map where keys are field SystemNames and values are the content. A name the
+    page's item type does not declare is an error, and the available names are listed.`,
       inputSchema: {
         pageId: z.string().describe("Page ID"),
         fields: jsonParam(z.record(z.unknown())).describe("Map of fieldSystemName -> value"),
@@ -137,13 +141,34 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
 
       // Update field values in pageItem (camelCase from DW API)
       const pageItem = (pageModel.pageItem ?? pageModel.PageItem) as Record<string, unknown> | undefined;
-      setItemFieldValues(pageItem, fields);
+      const { applied, unknown, available } = setItemFieldValues(pageItem, fields);
+
+      if (unknown.length > 0) {
+        throw new Error(
+          `Page ${pageId} (${prop(pageModel, "ItemType") ?? "no item type"}) has no field ${unknown.join(", ")}. ` +
+          `Available: ${available.join(", ") || "none - the page has no item type"}`
+        );
+      }
 
       // Save
       const saveRes = await client.post<Record<string, unknown>>("PageSave", pageModel);
       const status = checkStatus(saveRes);
       if (!status.ok) throw new Error(`Failed to update page fields: ${status.message}`);
-      return { content: [{ type: "text", text: `Fields updated on page ${pageId}` }] };
+
+      // Read back: DW answers "ok" whether or not a value was stored.
+      const afterRes = await client.get<Record<string, unknown>>("GetPageById", { Id: pageId });
+      const after = unwrapModel<Record<string, unknown>>(afterRes);
+      const stored = readItemFieldValues(
+        (after.pageItem ?? after.PageItem) as Record<string, unknown> | undefined,
+        applied
+      );
+
+      return {
+        content: [{
+          type: "text",
+          text: `Fields updated on page ${pageId}\n${JSON.stringify(stored, null, 2)}`,
+        }],
+      };
     }
   );
 

@@ -168,23 +168,62 @@ export function checkStatus(response: unknown): { ok: boolean; message: string }
   return { ok, message };
 }
 
+/** Every field the item structure declares, in order, with its current value. */
+export function listItemFields(
+  item: Record<string, unknown> | undefined
+): Array<{ systemName: string; value: unknown; field: Record<string, unknown> }> {
+  const groups = (item?.groups ?? item?.Groups ?? []) as Array<Record<string, unknown>>;
+
+  return groups.flatMap(group => {
+    const groupFields = (group.fields ?? group.Fields ?? []) as Array<Record<string, unknown>>;
+
+    return groupFields.map(field => ({
+      systemName: (field.systemName ?? field.SystemName) as string,
+      value: field.value ?? field.Value,
+      field,
+    }));
+  });
+}
+
 /** Set field values in a DW Groups/Fields item structure (PageItem or ContentItem).
- *  Handles both camelCase and PascalCase property names from DW API. */
+ *  Handles both camelCase and PascalCase property names from DW API.
+ *
+ *  A name the item type does not declare cannot be assigned anywhere, and DW then saves the model
+ *  without complaint - so it is reported back rather than swallowed. A typo in a systemName used to
+ *  look exactly like a successful write. */
 export function setItemFieldValues(
   item: Record<string, unknown> | undefined,
   fields: Record<string, unknown>
-): void {
-  if (!item) return;
-  const groups = (item.groups ?? item.Groups ?? []) as Array<Record<string, unknown>>;
-  for (const group of groups) {
-    const groupFields = (group.fields ?? group.Fields ?? []) as Array<Record<string, unknown>>;
-    for (const field of groupFields) {
-      const sysName = (field.systemName ?? field.SystemName) as string;
-      if (sysName in fields) {
-        // Set both casings to be safe
-        field.value = fields[sysName];
-        field.Value = fields[sysName];
-      }
+): { applied: string[]; unknown: string[]; available: string[] } {
+  const declared = listItemFields(item);
+  const applied: string[] = [];
+
+  for (const { systemName, field } of declared) {
+    if (systemName in fields) {
+      // Set both casings to be safe
+      field.value = fields[systemName];
+      field.Value = fields[systemName];
+      applied.push(systemName);
     }
   }
+
+  return {
+    applied,
+    unknown: Object.keys(fields).filter(name => !applied.includes(name)),
+    available: declared.map(entry => entry.systemName),
+  };
+}
+
+/** What the item holds now, for the names a caller just wrote - the proof that a write landed. */
+export function readItemFieldValues(
+  item: Record<string, unknown> | undefined,
+  names: string[]
+): Record<string, unknown> {
+  const wanted = new Set(names);
+
+  return Object.fromEntries(
+    listItemFields(item)
+      .filter(entry => wanted.has(entry.systemName))
+      .map(entry => [entry.systemName, entry.value])
+  );
 }

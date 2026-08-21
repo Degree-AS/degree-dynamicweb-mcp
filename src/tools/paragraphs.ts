@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues } from "../client.js";
+import { DwClient, unwrapList, unwrapModel, checkStatus, setItemFieldValues, readItemFieldValues } from "../client.js";
 import { jsonParam, prop } from "../utils.js";
 
 export function registerParagraphTools(server: McpServer, client: DwClient): void {
@@ -88,8 +88,12 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
     {
       description: `Set item fields on a DynamicWeb paragraph.
 
-    Fetches the current paragraph, updates field values in its contentItem structure, then saves.
-    fields is a key-value map where keys are field SystemNames and values are the content.
+    Fetches the current paragraph, updates field values in its contentItem structure, saves, then
+    reads the paragraph back and reports what it now holds — so a write that did not land is visible
+    instead of being reported as success.
+
+    fields is a key-value map where keys are field SystemNames and values are the content. A name the
+    paragraph's item type does not declare is an error, and the available names are listed.
     For richtext fields, provide HTML string.
     For file/image fields use the file path string (e.g. "/Files/Images/hero.jpg").`,
       inputSchema: {
@@ -104,13 +108,34 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
 
       // Update field values in contentItem (camelCase from DW API)
       const contentItem = (model.contentItem ?? model.ContentItem) as Record<string, unknown> | undefined;
-      setItemFieldValues(contentItem, fields);
+      const { applied, unknown, available } = setItemFieldValues(contentItem, fields);
+
+      if (unknown.length > 0) {
+        throw new Error(
+          `Paragraph ${paragraphId} (${prop(model, "ItemType") ?? "no item type"}) has no field ${unknown.join(", ")}. ` +
+          `Available: ${available.join(", ") || "none - the paragraph has no item type"}`
+        );
+      }
 
       // Save
       const saveRes = await client.post<Record<string, unknown>>("ParagraphSave", model);
       const status = checkStatus(saveRes);
       if (!status.ok) throw new Error(`Failed to update paragraph fields: ${status.message}`);
-      return { content: [{ type: "text", text: `Fields updated on paragraph ${paragraphId}` }] };
+
+      // Read back: DW answers "ok" whether or not a value was stored.
+      const afterRes = await client.get<Record<string, unknown>>("GetParagraphById", { Id: paragraphId });
+      const after = unwrapModel<Record<string, unknown>>(afterRes);
+      const stored = readItemFieldValues(
+        (after.contentItem ?? after.ContentItem) as Record<string, unknown> | undefined,
+        applied
+      );
+
+      return {
+        content: [{
+          type: "text",
+          text: `Fields updated on paragraph ${paragraphId}\n${JSON.stringify(stored, null, 2)}`,
+        }],
+      };
     }
   );
 
