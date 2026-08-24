@@ -624,4 +624,152 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
       };
     }
   );
+
+  server.registerTool(
+    "dw_itemtype_health",
+    {
+      description: `Report mismatches between item type definitions and the database schema.
+
+    Only item types with at least one discrepancy are listed, and for those every field is returned.
+    An item type whose table is missing entirely does NOT appear at all — absence is not proof of health.
+
+    Per field:
+    - existsInSchema: false → column missing from the DB table; saving that field silently fails
+    - existsInMeta: false   → column orphaned in the DB, no longer declared in the item type XML
+
+    Use after deploying new item type XML, and after dw_itemtype_sync_schema.`,
+      inputSchema: {
+        onlyProblems: z.boolean().optional().default(true)
+          .describe("Return only fields that actually mismatch. Set false for the full raw report."),
+      },
+    },
+    async ({ onlyProblems }) => {
+      const res = await client.get("ItemTypeHealthAll");
+      const rows = unwrapList<Record<string, unknown>>(res);
+
+      const problems = rows.filter(r => r.existsInSchema === false || r.existsInMeta === false);
+      const listed = onlyProblems ? problems : rows;
+
+      const byType: Record<string, Array<Record<string, unknown>>> = {};
+      for (const r of listed) {
+        const t = String(r.itemTypeSystemName ?? "");
+        (byType[t] ??= []).push({
+          field: r.itemFieldSystemName,
+          missingColumn: r.existsInSchema === false || undefined,
+          orphanedColumn: r.existsInMeta === false || undefined,
+        });
+      }
+
+      const missingColumns = problems.filter(r => r.existsInSchema === false).length;
+      const orphanedColumns = problems.filter(r => r.existsInMeta === false).length;
+
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `${rows.length} field rows reported across ${new Set(rows.map(r => r.itemTypeSystemName)).size} item type(s).`,
+            `${missingColumns} missing column(s), ${orphanedColumns} orphaned column(s).`,
+            missingColumns > 0
+              ? `\nMissing columns block saves — run dw_itemtype_sync_schema, then re-check.`
+              : "",
+            `\n${JSON.stringify(byType, null, 2)}`,
+          ].filter(Boolean).join("\n"),
+        }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "dw_itemtype_sync_schema",
+    {
+      description: `Reload item type definitions from the XML files and sync the database schema to match.
+
+    This is what creates missing ItemType_* tables and adds missing columns after new item type
+    XML has been deployed. Deploying the XML alone does not touch the database.
+
+    Important: the underlying DatabaseFirstActivationWorkflow aborts the whole loop on the first
+    item type that throws, so every item type after it is left unsynced. The endpoint still returns
+    "ok" in that case — it does NOT report per-type failures. Always follow up with
+    dw_itemtype_health, and read /Files/System/Log/items/ActivationWorkflow for the real errors.
+
+    A common cause of abort: a column declared as Int32 in the XML (e.g. an item relation list)
+    whose table still holds legacy inline JSON, so ALTER COLUMN ... INT fails on conversion.`,
+    },
+    async () => {
+      const res = await client.command("ItemTypeListReload", {});
+      const status = checkStatus(res);
+      if (!status.ok) throw new Error(status.message || "ItemTypeListReload failed");
+      return {
+        content: [{
+          type: "text",
+          text: "✓ Item types reloaded and schema sync attempted.\n\n"
+            + "This reports success even if the sync aborted partway. Verify with dw_itemtype_health "
+            + "and check today's log under /Files/System/Log/items/ActivationWorkflow.",
+        }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "dw_itemtype_usages",
+    {
+      description: "List where an item type is actually used (pages, paragraphs). Read-only. Returns entityId, entityName, usageType.",
+      inputSchema: { systemName: z.string().describe("Item type systemName, e.g. 'Accordion'") },
+    },
+    async ({ systemName }) => {
+      const res = await client.get("ItemTypeUsagesBySystemName", { SystemName: systemName });
+      const rows = unwrapList<Record<string, unknown>>(res);
+      const usages = rows.map(r => ({
+        entityId: r.entityId,
+        entityName: r.entityName,
+        usageType: r.usageType,
+        contentArea: r.contentAreaName,
+      }));
+      return {
+        content: [{
+          type: "text",
+          text: `${usages.length} usage(s) of '${systemName}':\n\n${JSON.stringify(usages, null, 2)}`,
+        }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "dw_itemtype_clean_table",
+    {
+      description: `DESTRUCTIVE. Delete orphaned rows from an item type's table — rows no longer
+    referenced by any page or paragraph.
+
+    Legitimate uses:
+    - a stale row blocks a schema migration (e.g. legacy inline JSON in a column that must become INT,
+      making ALTER COLUMN fail and aborting the whole item type sync)
+    - clearing rows left behind by deleted or copied paragraphs
+
+    Rows are deleted permanently. There is no per-row preview: you cannot see what will go before it
+    goes. Before running this, check dw_itemtype_usages to see what is still referenced, and back up
+    any content you might need to restore. Confirm with the user first.`,
+      inputSchema: {
+        systemName: z.string().describe("Item type systemName whose table to clean, e.g. 'Accordion'"),
+        confirm: z.boolean().describe("Must be true. Explicit acknowledgement that rows will be deleted permanently."),
+      },
+    },
+    async ({ systemName, confirm }) => {
+      if (!confirm) {
+        throw new Error(
+          `Refusing to clean ItemType_${systemName}: pass confirm=true to acknowledge permanent row deletion.`
+        );
+      }
+      const res = await client.command("ItemTypeCleanTable", { SystemName: systemName });
+      const status = checkStatus(res);
+      if (!status.ok) throw new Error(status.message || "ItemTypeCleanTable failed");
+      return {
+        content: [{
+          type: "text",
+          text: `✓ Cleaned orphaned rows from ItemType_${systemName}.\n\n`
+            + "If this was done to unblock a schema migration, run dw_itemtype_sync_schema now, "
+            + "then dw_itemtype_health to confirm the missing tables/columns were created.",
+        }],
+      };
+    }
+  );
 }

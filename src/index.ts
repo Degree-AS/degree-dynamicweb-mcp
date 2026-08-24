@@ -33,7 +33,7 @@ const dwClient = new DwClient(config);
 
 const server = new McpServer({
   name: "degree-dynamicweb",
-  version: "1.3.0",
+  version: "1.4.0",
 });
 
 registerItemTypeTools(server, dwClient);
