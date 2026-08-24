@@ -15,6 +15,19 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 | `dw_itemtype_update_restrictions` | Update restrictions (allowed parents, children, websites, etc.)    |
 | `dw_itemtype_delete`              | Delete an item type                                                |
 
+#### Schema maintenance
+
+Deploying item type XML does not touch the database. Until the schema is synced, a field whose column is missing saves without error and keeps nothing.
+
+| Tool                      | Description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `dw_itemtype_health`      | Report fields whose DB column is missing, and columns the XML no longer declares   |
+| `dw_itemtype_sync_schema` | Reload item type XML and create the missing tables and columns                     |
+| `dw_itemtype_usages`      | List the pages and paragraphs that use an item type                               |
+| `dw_itemtype_clean_table` | **Destructive.** Delete orphaned rows from an item type's table                    |
+
+After deploying new XML: `dw_itemtype_sync_schema`, then `dw_itemtype_health`. The sync endpoint answers "ok" even when it aborted partway, so the health check is what tells you whether it worked - and `/Files/System/Log/items/ActivationWorkflow` holds the real errors. An item type whose table is missing entirely does not appear in the health report at all.
+
 ### Fields
 
 | Tool              | Description                                                          |
@@ -45,12 +58,14 @@ MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Co
 | `dw_paragraph_set_fields` | Set item field values on a paragraph |
 | `dw_paragraph_delete`     | Delete a paragraph                   |
 
+`dw_page_set_fields` and `dw_paragraph_set_fields` verify their own write. A field name the item type does not declare is an error that lists the names it does have, and after saving they read the item back and return what it now holds. DW answers "ok" whether or not a value was stored, so a typo in a SystemName used to be indistinguishable from a successful write.
+
 ### Products
 
 | Tool                      | Description                                                                |
 | ------------------------- | -------------------------------------------------------------------------- |
 | `dw_product_list`         | List products, optionally filtered by group or search                      |
-| `dw_product_get`          | Get a single product (full model incl. CustomFields/CategoryFields)        |
+| `dw_product_get`          | Get a single product (full model incl. CustomFields/CategoryFields). Returns `{found: false}` for a missing product rather than an API error |
 | `dw_product_update`       | Update top-level fields, customFields, and categoryFields on a product     |
 | `dw_product_delete`       | Delete one or more products                                                |
 | `dw_product_bulk_discount`| Apply a percentage discount to DefaultPrice across a group or product list |
@@ -395,9 +410,9 @@ Numeric TypeId is also accepted directly. Use `dw_product_field_type_list` to fe
 src/
   index.ts          Entry point - reads config from env, registers tools
   client.ts         DwClient - HTTP client for Admin API, Update API, Delivery API
-  utils.ts          Shared Zod helpers (jsonParam, numParam) and string helpers (pascal)
+  utils.ts          Shared Zod helpers (jsonParam, numParam) and response helpers (prop, pascal)
   tools/
-    itemTypes.ts    Item type CRUD, fields, restrictions, settings, editor discovery
+    itemTypes.ts    Item type CRUD, fields, restrictions, settings, editor discovery, schema health and sync
     pages.ts        Page and area management
     paragraphs.ts   Paragraph management (uses ParagraphNew + ParagraphSave)
     products.ts     Product CRUD, bulk discount, custom/category field value updates
