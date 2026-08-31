@@ -1,6 +1,6 @@
 {
   "name": "@degree-as/dynamicweb-mcp",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "MCP server for DynamicWeb 10 Admin API",
   "type": "module",
   "main": "dist/index.js",
