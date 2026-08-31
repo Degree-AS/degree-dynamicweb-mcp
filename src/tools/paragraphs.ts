@@ -8,6 +8,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List paragraphs on a DynamicWeb page.",
       inputSchema: {
         pageId: z.string().describe("Page ID to list paragraphs for"),
@@ -33,6 +34,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_get",
     {
+      annotations: { readOnlyHint: true },
       description: "Get a single DynamicWeb paragraph by ID, including all item fields.",
       inputSchema: {
         paragraphId: z.string().describe("Paragraph ID"),
@@ -48,6 +50,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_create",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description: `Create a new paragraph on a DynamicWeb page.
 
     Creates the paragraph via ParagraphSave with the specified item type.
@@ -86,6 +89,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_set_fields",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Set item fields on a DynamicWeb paragraph.
 
     Fetches the current paragraph, updates field values in its contentItem structure, saves, then
@@ -142,6 +146,7 @@ export function registerParagraphTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_paragraph_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a DynamicWeb paragraph by ID.",
       inputSchema: { paragraphId: z.string() },
     },

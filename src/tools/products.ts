@@ -80,6 +80,7 @@ export function registerProductTools(server: McpServer, client: DwClient): void 
   server.registerTool(
     "dw_product_list",
     {
+      annotations: { readOnlyHint: true },
       description: `List DynamicWeb products. Filter by groupId (product catalog group) or search term.
 Returns id, number, name, defaultPrice, stock, active. Use pagingSize to control result count.`,
       inputSchema: {
@@ -124,6 +125,7 @@ Returns id, number, name, defaultPrice, stock, active. Use pagingSize to control
   server.registerTool(
     "dw_product_get",
     {
+      annotations: { readOnlyHint: true },
       description: "Get a single DynamicWeb product by ID. Returns the full model including CustomFields.",
       inputSchema: {
         id: z.string().describe("Product ID, e.g. 'PROD1'"),
@@ -153,6 +155,7 @@ Returns id, number, name, defaultPrice, stock, active. Use pagingSize to control
   server.registerTool(
     "dw_product_update",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Update fields on an existing DynamicWeb product.
 Fetches the current product, overlays your field updates, and saves via ProductSave (update mode, Query.Type=ProductById).
 
@@ -200,6 +203,7 @@ Manage the schema of customFields/categoryFields via dw_product_field_save / dw_
   server.registerTool(
     "dw_product_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: `Delete one or more DynamicWeb products. Irreversible.
 IDs must be in modelIdentifier format: 'PROD1|LANG1|'. The tool accepts plain IDs too and auto-formats them.`,
       inputSchema: {
@@ -227,6 +231,7 @@ IDs must be in modelIdentifier format: 'PROD1|LANG1|'. The tool accepts plain ID
   server.registerTool(
     "dw_product_bulk_discount",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: `Apply a percentage discount to DefaultPrice across a set of products (modifies the base price in-place).
 Target either a groupId (all products in the group) or an explicit productIds array. Returns per-product old/new price.`,
       inputSchema: {

@@ -8,6 +8,7 @@ export function registerFileTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_files_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List files in a DynamicWeb directory. Optionally filter by file extensions.",
       inputSchema: {
         directoryPath: z.string().default("/Files").describe("Directory path, e.g. '/Files/Images', '/Files/Uploads'"),
@@ -41,6 +42,7 @@ export function registerFileTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_files_directories",
     {
+      annotations: { readOnlyHint: true },
       description: "List subdirectories in a DynamicWeb directory.",
       inputSchema: {
         directoryPath: z.string().default("/Files").describe("Directory path, e.g. '/Files/Images'"),

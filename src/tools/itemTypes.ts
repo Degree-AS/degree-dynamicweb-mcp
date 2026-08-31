@@ -163,6 +163,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List all DynamicWeb item types. Returns systemName, name, category, fieldsCount, enabledFor.",
     },
     async () => {
@@ -182,6 +183,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_get",
     {
+      annotations: { readOnlyHint: true },
       description: "Get a single DynamicWeb item type by systemName, including all restrictions.",
       inputSchema: { systemName: z.string().describe("Exact systemName, e.g. 'HeroBanner'") },
     },
@@ -195,6 +197,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_create",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description: `Create a new DynamicWeb item type with fields and restrictions in one operation.
 
     Category conventions:
@@ -347,6 +350,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_update_settings",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Update Settings fields on an existing DynamicWeb item type.
     Only pass the fields you want to change — omitted ones are preserved from current state.
 
@@ -408,6 +412,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_update_restrictions",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Update restrictions on an existing DynamicWeb item type.
 
     Only pass the restriction arrays you want to change — omitted ones are left untouched.
@@ -478,6 +483,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a DynamicWeb item type by systemName.",
       inputSchema: { systemName: z.string() },
     },
@@ -492,6 +498,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_field_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List all fields for a DynamicWeb item type. Returns systemName, type, required for each field.",
       inputSchema: { systemName: z.string().describe("Item type systemName") },
     },
@@ -511,6 +518,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_field_save",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Add or update a field on a DynamicWeb item type.
 
     Set isNew: true to add a new field. Set isNew: false to update existing.
@@ -569,6 +577,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_field_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a field from a DynamicWeb item type.",
       inputSchema: {
         itemTypeSystemName: z.string(),
@@ -590,6 +599,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_field_types",
     {
+      annotations: { readOnlyHint: true },
       description: `List all available field editor types from this DynamicWeb instance.
     Fetches the authoritative list from the DW AddIn registry — not hardcoded.
     Returns full .NET class names and short aliases you can use in dw_field_save and dw_itemtype_create.`,
@@ -628,6 +638,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_health",
     {
+      annotations: { readOnlyHint: true },
       description: `Report mismatches between item type definitions and the database schema.
 
     Only item types with at least one discrepancy are listed, and for those every field is returned.
@@ -682,6 +693,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_sync_schema",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Reload item type definitions from the XML files and sync the database schema to match.
 
     This is what creates missing ItemType_* tables and adds missing columns after new item type
@@ -713,6 +725,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_usages",
     {
+      annotations: { readOnlyHint: true },
       description: "List where an item type is actually used (pages, paragraphs). Read-only. Returns entityId, entityName, usageType.",
       inputSchema: { systemName: z.string().describe("Item type systemName, e.g. 'Accordion'") },
     },
@@ -737,6 +750,7 @@ export function registerItemTypeTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_itemtype_clean_table",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: `DESTRUCTIVE. Delete orphaned rows from an item type's table — rows no longer
     referenced by any page or paragraph.
 
