@@ -1,125 +1,31 @@
 # degree-dynamicweb-mcp
 
-MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives Claude Code full access to manage DynamicWeb item types, fields, pages, paragraphs, and API discovery - without touching the DW Admin UI.
+MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives any MCP-capable AI client or agent framework full access to manage DynamicWeb item types, fields, pages, paragraphs, products, and API discovery - without touching the DW Admin UI.
 
-## Tools
+## Installation
 
-### Item Types
+Nothing to build or clone - the server is published on npm and `npx` fetches it on first run. You need:
 
-| Tool                              | Description                                                        |
-| --------------------------------- | ------------------------------------------------------------------ |
-| `dw_itemtype_list`                | List all item types                                                |
-| `dw_itemtype_get`                 | Get item type details and restrictions                             |
-| `dw_itemtype_create`              | Create item type with fields, groups, and restrictions in one call |
-| `dw_itemtype_update_settings`     | Update settings (name, category, icon, availability, etc.)         |
-| `dw_itemtype_update_restrictions` | Update restrictions (allowed parents, children, websites, etc.)    |
-| `dw_itemtype_delete`              | Delete an item type                                                |
-
-#### Schema maintenance
-
-Deploying item type XML does not touch the database. Until the schema is synced, a field whose column is missing saves without error and keeps nothing.
-
-| Tool                      | Description                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------- |
-| `dw_itemtype_health`      | Report fields whose DB column is missing, and columns the XML no longer declares   |
-| `dw_itemtype_sync_schema` | Reload item type XML and create the missing tables and columns                     |
-| `dw_itemtype_usages`      | List the pages and paragraphs that use an item type                               |
-| `dw_itemtype_clean_table` | **Destructive.** Delete orphaned rows from an item type's table                    |
-
-After deploying new XML: `dw_itemtype_sync_schema`, then `dw_itemtype_health`. The sync endpoint answers "ok" even when it aborted partway, so the health check is what tells you whether it worked - and `/Files/System/Log/items/ActivationWorkflow` holds the real errors. An item type whose table is missing entirely does not appear in the health report at all.
-
-### Fields
-
-| Tool              | Description                                                          |
-| ----------------- | -------------------------------------------------------------------- |
-| `dw_field_list`   | List fields on an item type                                          |
-| `dw_field_save`   | Add or update a field                                                |
-| `dw_field_delete` | Delete a field                                                       |
-| `dw_field_types`  | List all available editor types from the DW instance (not hardcoded) |
-
-### Pages
-
-| Tool                 | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `dw_page_list`       | List pages, optionally filtered by area or parent |
-| `dw_page_get`        | Get a page with all item fields                   |
-| `dw_page_create`     | Create a page under a parent                      |
-| `dw_page_set_fields` | Set item field values on a page                   |
-| `dw_page_delete`     | Delete a page                                     |
-| `dw_area_list`       | List all areas (websites)                         |
-
-### Paragraphs
-
-| Tool                      | Description                          |
-| ------------------------- | ------------------------------------ |
-| `dw_paragraph_list`       | List paragraphs on a page            |
-| `dw_paragraph_get`        | Get a paragraph with all item fields |
-| `dw_paragraph_create`     | Create a paragraph on a page         |
-| `dw_paragraph_set_fields` | Set item field values on a paragraph |
-| `dw_paragraph_delete`     | Delete a paragraph                   |
-
-`dw_page_set_fields` and `dw_paragraph_set_fields` verify their own write. A field name the item type does not declare is an error that lists the names it does have, and after saving they read the item back and return what it now holds. DW answers "ok" whether or not a value was stored, so a typo in a SystemName used to be indistinguishable from a successful write.
-
-### Products
-
-| Tool                      | Description                                                                |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `dw_product_list`         | List products, optionally filtered by group or search                      |
-| `dw_product_get`          | Get a single product (full model incl. CustomFields/CategoryFields). Returns `{found: false}` for a missing product rather than an API error |
-| `dw_product_update`       | Update top-level fields, customFields, and categoryFields on a product     |
-| `dw_product_delete`       | Delete one or more products                                                |
-| `dw_product_bulk_discount`| Apply a percentage discount to DefaultPrice across a group or product list |
-
-`dw_product_update` accepts three input maps:
-
-- `fields` - top-level product fields (Name, DefaultPrice, Stock, etc.)
-- `customFields` - global product custom field values, keyed by SystemName
-- `categoryFields` - product category field values, keyed by SystemName
-
-### Product Schema
-
-Manage the PIM data model: product categories (groups of attributes) and product fields (the attributes themselves).
-
-| Tool                          | Description                                                       |
-| ----------------------------- | ----------------------------------------------------------------- |
-| `dw_product_field_type_list`  | List the 15 product field types (TypeId + aliases)                |
-| `dw_product_category_list`    | List product categories                                           |
-| `dw_product_category_save`    | Create or update a product category                               |
-| `dw_product_category_delete`  | Delete categories (3-step DW workflow handled internally)         |
-| `dw_product_field_list`       | List fields belonging to a category                               |
-| `dw_product_field_save`       | Create or update a field on a category (accepts type aliases)     |
-| `dw_product_field_delete`     | Delete fields from a single category                              |
-
-### Files
-
-| Tool                   | Description                                                 |
-| ---------------------- | ----------------------------------------------------------- |
-| `dw_files_list`        | List files in a directory, optionally filtered by extension |
-| `dw_files_directories` | List subdirectories                                         |
-
-### Delivery API (read-only)
-
-| Tool                    | Description                   |
-| ----------------------- | ----------------------------- |
-| `dw_content_areas`      | Fetch areas from Delivery API |
-| `dw_content_pages`      | Fetch pages with content      |
-| `dw_content_paragraphs` | Fetch paragraphs with content |
-
-### API Discovery
-
-| Tool                     | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `dw_api_search`          | Search the Swagger spec for endpoints by keyword |
-| `dw_api_endpoint_schema` | Get request/response schema for an endpoint      |
-| `dw_api_call`            | Raw call to any Admin API endpoint               |
-
-## Setup
+- **Node.js 18+** (`node -v`)
+- **A DynamicWeb 10 instance** you can reach over HTTP, with the Admin API enabled
+- **An API token** for that instance (step 1 below)
 
 ### 1. Get a DW API token
 
-In DynamicWeb Admin, go to **Settings > Developer > API Keys** and create a new key with full access.
+In DynamicWeb Admin: **Settings > Developer > API Keys > New**. Give the key full access - the server touches item types, pages, paragraphs, products, files, and the Swagger spec, so a narrowly scoped key will fail on some tools. Copy the token; DW shows it once.
 
-### 2. Configure your AI client
+### 2. Add the server to your AI client
+
+Fastest path for Claude Code - run this in your project (drop `-s project` to install it just for yourself):
+
+```bash
+claude mcp add dynamicweb -s project \
+  --env DW_BASE_URL=https://your-dw-instance \
+  --env DW_API_TOKEN=your-token \
+  -- npx -y @degree-as/dynamicweb-mcp
+```
+
+Or write the config by hand, for any client:
 
 <details>
 <summary><b>Claude Code</b></summary>
@@ -296,13 +202,84 @@ mcpServers:
 
 </details>
 
-### 3. Restart your client
+### 3. Restart your client and verify
 
-The MCP server starts automatically when your AI client loads.
+Restart so the client picks up the config, then check the server is live:
 
-### Local development
+- **Claude Code** - run `/mcp`; `dynamicweb` should be listed as connected
+- **Any client** - ask it to run `dw_area_list`. A list of your websites means the token and URL are good.
 
-If you want to run from source instead of the published package:
+### Other agents and frameworks
+
+The server has no client-specific behaviour - standard stdio MCP, tools only, no prompts, resources, or sampling - so any MCP-capable framework can drive it. Whatever the language, it needs the same four values:
+
+| Setting | Value                            |
+| ------- | -------------------------------- |
+| command | `npx`                            |
+| args    | `-y @degree-as/dynamicweb-mcp`   |
+| env     | `DW_BASE_URL`, `DW_API_TOKEN`    |
+
+**OpenAI Agents SDK (Python)** - the SDK spawns the process itself; the context manager owns its lifetime:
+
+```python
+from agents import Agent
+from agents.mcp import MCPServerStdio
+
+async with MCPServerStdio(
+    name="DynamicWeb",
+    params={
+        "command": "npx",
+        "args": ["-y", "@degree-as/dynamicweb-mcp"],
+        "env": {"DW_BASE_URL": "https://your-dw-instance", "DW_API_TOKEN": "your-token"},
+    },
+    cache_tools_list=True,
+) as dw:
+    agent = Agent(name="DW editor", mcp_servers=[dw])
+```
+
+**OpenAI Agents SDK (JS/TS)** - same `MCPServerStdio` class from `@openai/agents`, but options are flat (`fullCommand` or `command`/`args`) and you call `await server.connect()` / `await server.close()` yourself. See the [MCP guide](https://openai.github.io/openai-agents-js/guides/mcp/) for the current option names.
+
+**LangChain / LangGraph** - via the [`langchain-mcp-adapters`](https://github.com/langchain-ai/langchain-mcp-adapters) package, which converts MCP tools into LangChain tools. **Pydantic AI**, **Mastra**, **Vercel AI SDK**, and **n8n** each have their own stdio MCP client taking the same four values above.
+
+#### ChatGPT and the OpenAI Responses API - not yet supported
+
+These do not spawn a local process. OpenAI's servers call your MCP endpoint over HTTP:
+
+```json
+{
+  "type": "mcp",
+  "server_label": "dynamicweb",
+  "server_url": "https://your-host/mcp",
+  "headers": { "Authorization": "Bearer ..." },
+  "require_approval": "never"
+}
+```
+
+This server speaks stdio only, so that path needs a Streamable HTTP entrypoint plus an authentication story - the endpoint would be reachable from the public internet, and these tools include destructive ones (`dw_itemtype_clean_table`, `dw_product_bulk_discount`). Planned, not shipped. `src/server.ts` is already transport-agnostic so the server itself will not have to change.
+
+### Environment variables
+
+| Variable       | Required | Default                     | Notes                                                            |
+| -------------- | -------- | --------------------------- | ---------------------------------------------------------------- |
+| `DW_API_TOKEN` | yes      | -                           | Bearer token from **Settings > Developer > API Keys**             |
+| `DW_BASE_URL`  | no       | `https://localhost:38547`   | Instance root, no trailing slash. Default suits a local DW dev site |
+
+When `DW_BASE_URL` points at `localhost` or `127.0.0.1`, TLS verification is switched off so DW's self-signed dev certificate is accepted. Against any other host the certificate must be valid.
+
+### Troubleshooting
+
+| Symptom                                          | Cause                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `DW_API_TOKEN not set` on startup                | `env` block missing or misplaced in the config - it belongs inside the server entry |
+| `DW API error 401`                               | Token wrong, expired, or from a different instance                             |
+| `DW API error 403` on some tools only            | API key lacks full access - recreate it with broader rights                     |
+| `Non-JSON response`                              | `DW_BASE_URL` points at the frontend or a login redirect, not the Admin API root |
+| `fetch failed` / `self-signed certificate`       | Remote host with an untrusted certificate, or DW not running                    |
+| Tools missing after an upgrade                   | Client caches the old process - restart it fully                               |
+
+### Run from source
+
+Only needed if you are changing the server itself:
 
 ```bash
 git clone https://github.com/Degree-AS/degree-dynamicweb-mcp.git
@@ -311,7 +288,133 @@ npm install
 npm run build
 ```
 
-Then use `"command": "node", "args": ["/path/to/degree-dynamicweb-mcp/dist/index.js"]` in `.mcp.json`.
+Then point the config at your build instead of `npx`:
+
+```json
+{
+  "mcpServers": {
+    "dynamicweb": {
+      "command": "node",
+      "args": ["/absolute/path/to/degree-dynamicweb-mcp/dist/index.js"],
+      "env": {
+        "DW_BASE_URL": "https://localhost:38547",
+        "DW_API_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+## Tools
+
+### Item Types
+
+| Tool                              | Description                                                        |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `dw_itemtype_list`                | List all item types                                                |
+| `dw_itemtype_get`                 | Get item type details and restrictions                             |
+| `dw_itemtype_create`              | Create item type with fields, groups, and restrictions in one call |
+| `dw_itemtype_update_settings`     | Update settings (name, category, icon, availability, etc.)         |
+| `dw_itemtype_update_restrictions` | Update restrictions (allowed parents, children, websites, etc.)    |
+| `dw_itemtype_delete`              | Delete an item type                                                |
+
+#### Schema maintenance
+
+Deploying item type XML does not touch the database. Until the schema is synced, a field whose column is missing saves without error and keeps nothing.
+
+| Tool                      | Description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `dw_itemtype_health`      | Report fields whose DB column is missing, and columns the XML no longer declares   |
+| `dw_itemtype_sync_schema` | Reload item type XML and create the missing tables and columns                     |
+| `dw_itemtype_usages`      | List the pages and paragraphs that use an item type                               |
+| `dw_itemtype_clean_table` | **Destructive.** Delete orphaned rows from an item type's table                    |
+
+After deploying new XML: `dw_itemtype_sync_schema`, then `dw_itemtype_health`. The sync endpoint answers "ok" even when it aborted partway, so the health check is what tells you whether it worked - and `/Files/System/Log/items/ActivationWorkflow` holds the real errors. An item type whose table is missing entirely does not appear in the health report at all.
+
+### Fields
+
+| Tool              | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `dw_field_list`   | List fields on an item type                                          |
+| `dw_field_save`   | Add or update a field                                                |
+| `dw_field_delete` | Delete a field                                                       |
+| `dw_field_types`  | List all available editor types from the DW instance (not hardcoded) |
+
+### Pages
+
+| Tool                 | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `dw_page_list`       | List pages, optionally filtered by area or parent |
+| `dw_page_get`        | Get a page with all item fields                   |
+| `dw_page_create`     | Create a page under a parent                      |
+| `dw_page_set_fields` | Set item field values on a page                   |
+| `dw_page_delete`     | Delete a page                                     |
+| `dw_area_list`       | List all areas (websites)                         |
+
+### Paragraphs
+
+| Tool                      | Description                          |
+| ------------------------- | ------------------------------------ |
+| `dw_paragraph_list`       | List paragraphs on a page            |
+| `dw_paragraph_get`        | Get a paragraph with all item fields |
+| `dw_paragraph_create`     | Create a paragraph on a page         |
+| `dw_paragraph_set_fields` | Set item field values on a paragraph |
+| `dw_paragraph_delete`     | Delete a paragraph                   |
+
+`dw_page_set_fields` and `dw_paragraph_set_fields` verify their own write. A field name the item type does not declare is an error that lists the names it does have, and after saving they read the item back and return what it now holds. DW answers "ok" whether or not a value was stored, so a typo in a SystemName used to be indistinguishable from a successful write.
+
+### Products
+
+| Tool                      | Description                                                                |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `dw_product_list`         | List products, optionally filtered by group or search                      |
+| `dw_product_get`          | Get a single product (full model incl. CustomFields/CategoryFields). Returns `{found: false}` for a missing product rather than an API error |
+| `dw_product_update`       | Update top-level fields, customFields, and categoryFields on a product     |
+| `dw_product_delete`       | Delete one or more products                                                |
+| `dw_product_bulk_discount`| Apply a percentage discount to DefaultPrice across a group or product list |
+
+`dw_product_update` accepts three input maps:
+
+- `fields` - top-level product fields (Name, DefaultPrice, Stock, etc.)
+- `customFields` - global product custom field values, keyed by SystemName
+- `categoryFields` - product category field values, keyed by SystemName
+
+### Product Schema
+
+Manage the PIM data model: product categories (groups of attributes) and product fields (the attributes themselves).
+
+| Tool                          | Description                                                       |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `dw_product_field_type_list`  | List the 15 product field types (TypeId + aliases)                |
+| `dw_product_category_list`    | List product categories                                           |
+| `dw_product_category_save`    | Create or update a product category                               |
+| `dw_product_category_delete`  | Delete categories (3-step DW workflow handled internally)         |
+| `dw_product_field_list`       | List fields belonging to a category                               |
+| `dw_product_field_save`       | Create or update a field on a category (accepts type aliases)     |
+| `dw_product_field_delete`     | Delete fields from a single category                              |
+
+### Files
+
+| Tool                   | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| `dw_files_list`        | List files in a directory, optionally filtered by extension |
+| `dw_files_directories` | List subdirectories                                         |
+
+### Delivery API (read-only)
+
+| Tool                    | Description                   |
+| ----------------------- | ----------------------------- |
+| `dw_content_areas`      | Fetch areas from Delivery API |
+| `dw_content_pages`      | Fetch pages with content      |
+| `dw_content_paragraphs` | Fetch paragraphs with content |
+
+### API Discovery
+
+| Tool                     | Description                                      |
+| ------------------------ | ------------------------------------------------ |
+| `dw_api_search`          | Search the Swagger spec for endpoints by keyword |
+| `dw_api_endpoint_schema` | Get request/response schema for an endpoint      |
+| `dw_api_call`            | Raw call to any Admin API endpoint               |
 
 ## Field Type Aliases
 
