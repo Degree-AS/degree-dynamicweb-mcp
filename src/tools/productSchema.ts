@@ -45,6 +45,7 @@ export function registerProductSchemaTools(server: McpServer, client: DwClient):
   server.registerTool(
     "dw_product_field_type_list",
     {
+      annotations: { readOnlyHint: true },
       description: `List all DynamicWeb product field types (Text, Integer, Date, etc.) with their TypeId.
 Use the returned 'id' as TypeId in dw_product_field_save, or use a short alias (text, longtext, checkbox, date, datetime, number, decimal, link, file, richtext, dropdown).`,
     },
@@ -70,6 +71,7 @@ Use the returned 'id' as TypeId in dw_product_field_save, or use a short alias (
   server.registerTool(
     "dw_product_category_list",
     {
+      annotations: { readOnlyHint: true },
       description: `List DynamicWeb product categories (groups of product attribute fields).
 Returns id, name, fieldsCount per category.`,
       inputSchema: {
@@ -105,6 +107,7 @@ Returns id, name, fieldsCount per category.`,
   server.registerTool(
     "dw_product_category_save",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Create or update a DynamicWeb product category (group of attribute fields).
 Set isNew: true to create, false to update an existing one.
 Category fields are added separately via dw_product_field_save with this category's id.`,
@@ -133,6 +136,7 @@ Category fields are added separately via dw_product_field_save with this categor
   server.registerTool(
     "dw_product_category_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: `Delete one or more DynamicWeb product categories. Irreversible.
 Fields belonging to the categories must be deleted first via dw_product_field_delete - otherwise the validation step will reject them.
 
@@ -166,6 +170,7 @@ Internally runs DW's 3-step delete: ProductCategorySetIds (mark candidates) → 
   server.registerTool(
     "dw_product_field_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List all product fields belonging to a category. Returns systemName, name, typeId, typeName, required.",
       inputSchema: {
         categoryId: z.string().describe("Category id, e.g. 'TechSpecs'"),
@@ -202,6 +207,7 @@ Internally runs DW's 3-step delete: ProductCategorySetIds (mark candidates) → 
   server.registerTool(
     "dw_product_field_save",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Create or update a product field (attribute) on a product category.
 
 Type can be a numeric TypeId or a short alias: text, longtext, checkbox, date, datetime, number, decimal, link, file, richtext, dropdown.
@@ -258,6 +264,7 @@ Field SystemName becomes the key the frontend reads via the product CustomFields
   server.registerTool(
     "dw_product_field_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: `Delete one or more product fields from a single category. Irreversible.
 All ids must belong to the same categoryId. To delete fields across multiple categories, call this tool once per category.`,
       inputSchema: {

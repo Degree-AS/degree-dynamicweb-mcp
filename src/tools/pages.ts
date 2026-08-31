@@ -8,6 +8,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_page_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List DynamicWeb pages. Filter by areaId (website ID) or parentPageId.",
       inputSchema: {
         areaId: z.string().optional().describe("Area (website) ID to filter by"),
@@ -40,6 +41,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_page_get",
     {
+      annotations: { readOnlyHint: true },
       description: "Get a single DynamicWeb page by ID, including all item fields.",
       inputSchema: {
         pageId: z.string().describe("Page ID (numeric string)"),
@@ -55,6 +57,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_page_create",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description: `Create a new DynamicWeb page under a parent page.
 
     Steps: 1) Creates blank page via PageCreate 2) Sets name, item type, publication via PageSave.
@@ -121,6 +124,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_page_set_fields",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: `Set item fields on a DynamicWeb page.
 
     Fetches the current page, updates field values in its pageItem structure, saves, then reads the
@@ -175,6 +179,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_page_delete",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a DynamicWeb page by ID. This is irreversible.",
       inputSchema: { pageId: z.string() },
     },
@@ -189,6 +194,7 @@ export function registerPageTools(server: McpServer, client: DwClient): void {
   server.registerTool(
     "dw_area_list",
     {
+      annotations: { readOnlyHint: true },
       description: "List all DynamicWeb areas (websites/channels).",
     },
     async () => {

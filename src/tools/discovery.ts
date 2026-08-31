@@ -43,6 +43,7 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_api_search",
     {
+      annotations: { readOnlyHint: true },
       description: `Search the DynamicWeb Admin API Swagger spec for endpoints matching a keyword.
     Use this when you're unsure which endpoint to call — search by feature name (e.g. "navigation", "media", "user").
     Returns matching paths with their HTTP methods and summaries.`,
@@ -132,6 +133,7 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_api_endpoint_schema",
     {
+      annotations: { readOnlyHint: true },
       description: `Get the full request/response schema for a specific DynamicWeb Admin API endpoint.
     Use this before calling an unknown endpoint to understand its parameters.`,
       inputSchema: {
@@ -166,6 +168,7 @@ export function registerDiscoveryTools(server: McpServer, client: DwClient): voi
   server.registerTool(
     "dw_api_call",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
       description: `Make a raw call to any DynamicWeb Admin API endpoint.
     For GET: provide params as query params.
     For POST: choose bodyMode.

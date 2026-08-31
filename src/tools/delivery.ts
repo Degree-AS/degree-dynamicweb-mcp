@@ -7,6 +7,7 @@ export function registerDeliveryTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_content_areas",
     {
+      annotations: { readOnlyHint: true },
       description: "Fetch all areas (websites) from DynamicWeb Delivery API. No auth required.",
     },
     async () => {
@@ -18,6 +19,7 @@ export function registerDeliveryTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_content_pages",
     {
+      annotations: { readOnlyHint: true },
       description: `Fetch pages from DynamicWeb Delivery API.
     Returns pages with their item fields (content).
     Use pageId to get a specific page, or areaId to list all pages in a website.`,
@@ -46,6 +48,7 @@ export function registerDeliveryTools(server: McpServer, client: DwClient): void
   server.registerTool(
     "dw_content_paragraphs",
     {
+      annotations: { readOnlyHint: true },
       description: `Fetch paragraphs (content blocks) from DynamicWeb Delivery API.
     Returns paragraphs with their item fields.
     Use pageId to get all paragraphs for a specific page.`,

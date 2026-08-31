@@ -1,22 +1,58 @@
 # degree-dynamicweb-mcp
 
-MCP (Model Context Protocol) server for DynamicWeb 10 Admin API. Gives any MCP-capable AI client or agent framework full access to manage DynamicWeb item types, fields, pages, paragraphs, products, and API discovery - without touching the DW Admin UI.
+[![npm](https://img.shields.io/npm/v/@degree-as/dynamicweb-mcp)](https://www.npmjs.com/package/@degree-as/dynamicweb-mcp)
+[![node](https://img.shields.io/node/v/@degree-as/dynamicweb-mcp)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/@degree-as/dynamicweb-mcp)](LICENSE)
+
+MCP (Model Context Protocol) server for the DynamicWeb 10 Admin API. Gives any MCP-capable AI client or agent framework 45 tools to manage item types, fields, pages, paragraphs, products, and the PIM data model - without touching the DW Admin UI.
+
+[Installation](#installation) · [Safety](#safety) · [Tools](#tools) · [Field type aliases](#field-type-aliases) · [Architecture](#architecture) · [Development](#development)
 
 ## Installation
 
-Nothing to build or clone - the server is published on npm and `npx` fetches it on first run. You need:
-
 - **Node.js 18+** (`node -v`)
-- **A DynamicWeb 10 instance** you can reach over HTTP, with the Admin API enabled
-- **An API token** for that instance (step 1 below)
+- **A DynamicWeb 10 instance** reachable over HTTP, with the Admin API enabled
+- **An API token** for it (step 1)
+
+Nothing to clone or build - the server is published on npm and `npx` fetches it on first run.
 
 ### 1. Get a DW API token
 
-In DynamicWeb Admin: **Settings > Developer > API Keys > New**. Give the key full access - the server touches item types, pages, paragraphs, products, files, and the Swagger spec, so a narrowly scoped key will fail on some tools. Copy the token; DW shows it once.
+In DynamicWeb Admin: **Settings > Developer > API Keys > New**. Give the key full access - the server reaches item types, pages, paragraphs, products, files, and the Swagger spec, so a narrowly scoped key fails on some tools. Copy the token; DW shows it once.
 
-### 2. Add the server to your AI client
+### 2. Add the server to your client
 
-Fastest path for Claude Code - run this in your project (drop `-s project` to install it just for yourself):
+Every client wants the same four values - `npx`, the package, and two environment variables:
+
+```json
+{
+  "mcpServers": {
+    "dynamicweb": {
+      "command": "npx",
+      "args": ["-y", "@degree-as/dynamicweb-mcp"],
+      "env": {
+        "DW_BASE_URL": "https://your-dw-instance",
+        "DW_API_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+Only the file and the top-level key differ between clients:
+
+| Client                 | File                                                                                            | Top-level key      |
+| ---------------------- | ----------------------------------------------------------------------------------------------- | ------------------ |
+| Claude Code            | `.mcp.json` in the project                                                                      | `mcpServers`       |
+| Claude Desktop         | `~/Library/Application Support/Claude/claude_desktop_config.json` · `%APPDATA%\Claude\…` (Win)   | `mcpServers`       |
+| Cursor                 | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)                                    | `mcpServers`       |
+| Windsurf               | `~/.codeium/windsurf/mcp_config.json`                                                            | `mcpServers`       |
+| Cline                  | its MCP settings UI, or the same JSON                                                            | `mcpServers`       |
+| VS Code / Copilot      | `.vscode/mcp.json`                                                                               | `servers`, and add `"type": "stdio"` |
+| Zed                    | `settings.json`                                                                                  | `context_servers`, and add `"source": "custom"` |
+| Continue.dev           | `~/.continue/config.yaml` (YAML, see below)                                                      | `mcpServers`       |
+
+Claude Code can skip the file entirely (drop `-s project` to install it just for yourself):
 
 ```bash
 claude mcp add dynamicweb -s project \
@@ -25,168 +61,8 @@ claude mcp add dynamicweb -s project \
   -- npx -y @degree-as/dynamicweb-mcp
 ```
 
-Or write the config by hand, for any client:
-
 <details>
-<summary><b>Claude Code</b></summary>
-
-Add to `.mcp.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Claude Desktop</b></summary>
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Cursor</b></summary>
-
-Add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
-
-```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>VS Code / GitHub Copilot</b></summary>
-
-Add `.vscode/mcp.json` to your project (note: uses `servers`, not `mcpServers`):
-
-```json
-{
-  "servers": {
-    "dynamicweb": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Windsurf</b></summary>
-
-Edit `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Cline</b></summary>
-
-Configure via Cline's MCP settings UI, or add to its config:
-
-```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Zed</b></summary>
-
-Add to Zed's `settings.json` (note: uses `context_servers`):
-
-```json
-{
-  "context_servers": {
-    "dynamicweb": {
-      "source": "custom",
-      "command": "npx",
-      "args": ["-y", "@degree-as/dynamicweb-mcp"],
-      "env": {
-        "DW_BASE_URL": "https://your-dw-instance",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Continue.dev</b></summary>
-
-Add to `~/.continue/config.yaml`:
+<summary>Continue.dev, as YAML</summary>
 
 ```yaml
 mcpServers:
@@ -204,10 +80,19 @@ mcpServers:
 
 ### 3. Restart your client and verify
 
-Restart so the client picks up the config, then check the server is live:
+Clients spawn the server once and cache its tool list, so a restart is required. Then:
 
 - **Claude Code** - run `/mcp`; `dynamicweb` should be listed as connected
-- **Any client** - ask it to run `dw_area_list`. A list of your websites means the token and URL are good.
+- **Any client** - ask it to run `dw_area_list`. A list of your websites means the URL and token are both good.
+
+### Environment variables
+
+| Variable       | Required | Default                   | Notes                                                               |
+| -------------- | -------- | ------------------------- | ------------------------------------------------------------------- |
+| `DW_API_TOKEN` | yes      | -                         | Bearer token from **Settings > Developer > API Keys**                |
+| `DW_BASE_URL`  | no       | `https://localhost:38547` | Instance root, no trailing slash. Default suits a local DW dev site  |
+
+When `DW_BASE_URL` points at `localhost` or `127.0.0.1`, the server disables TLS verification so DW's self-signed dev certificate is accepted. Against any other host the certificate must be valid.
 
 ### Other agents and frameworks
 
@@ -257,15 +142,6 @@ These do not spawn a local process. OpenAI's servers call your MCP endpoint over
 
 This server speaks stdio only, so that path needs a Streamable HTTP entrypoint plus an authentication story - the endpoint would be reachable from the public internet, and these tools include destructive ones (`dw_itemtype_clean_table`, `dw_product_bulk_discount`). Planned, not shipped. `src/server.ts` is already transport-agnostic so the server itself will not have to change.
 
-### Environment variables
-
-| Variable       | Required | Default                     | Notes                                                            |
-| -------------- | -------- | --------------------------- | ---------------------------------------------------------------- |
-| `DW_API_TOKEN` | yes      | -                           | Bearer token from **Settings > Developer > API Keys**             |
-| `DW_BASE_URL`  | no       | `https://localhost:38547`   | Instance root, no trailing slash. Default suits a local DW dev site |
-
-When `DW_BASE_URL` points at `localhost` or `127.0.0.1`, TLS verification is switched off so DW's self-signed dev certificate is accepted. Against any other host the certificate must be valid.
-
 ### Troubleshooting
 
 | Symptom                                          | Cause                                                                          |
@@ -279,7 +155,7 @@ When `DW_BASE_URL` points at `localhost` or `127.0.0.1`, TLS verification is swi
 
 ### Run from source
 
-Only needed if you are changing the server itself:
+Only needed to change the server itself:
 
 ```bash
 git clone https://github.com/Degree-AS/degree-dynamicweb-mcp.git
@@ -288,24 +164,57 @@ npm install
 npm run build
 ```
 
-Then point the config at your build instead of `npx`:
+Then point the config at the build instead of `npx`:
 
 ```json
-{
-  "mcpServers": {
-    "dynamicweb": {
-      "command": "node",
-      "args": ["/absolute/path/to/degree-dynamicweb-mcp/dist/index.js"],
-      "env": {
-        "DW_BASE_URL": "https://localhost:38547",
-        "DW_API_TOKEN": "your-token"
-      }
-    }
-  }
-}
+"command": "node",
+"args": ["/absolute/path/to/degree-dynamicweb-mcp/dist/index.js"]
 ```
 
+## Safety
+
+These tools write to a live CMS. Of the 45, **23 only read**, 12 create or update, and **10 can destroy data**.
+
+Every tool declares standard MCP [annotations](https://modelcontextprotocol.io/docs/concepts/tools) - `readOnlyHint`, `destructiveHint`, `idempotentHint` - so a client can warn before running one, or auto-approve the read-only ones. Whether it does is up to the client, not this server.
+
+| Destructive tool             | What it destroys                                                        |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `dw_itemtype_delete`         | An item type, and access to content stored against it                   |
+| `dw_field_delete`            | A field, and the values held in its column                              |
+| `dw_itemtype_clean_table`    | Orphaned rows in an item type's table - run `dw_itemtype_usages` first   |
+| `dw_page_delete`             | A page and its paragraphs                                               |
+| `dw_paragraph_delete`        | A paragraph and its field values                                        |
+| `dw_product_delete`          | One or more products                                                    |
+| `dw_product_bulk_discount`   | Overwrites `DefaultPrice` across a whole group - no undo                 |
+| `dw_product_category_delete` | A product category and its field definitions                            |
+| `dw_product_field_delete`    | A product field and its stored values                                   |
+| `dw_api_call`                | Anything - the caller picks the endpoint and method                     |
+
+Point a client at a staging instance before production. There is no dry-run mode and no built-in confirmation step: the server does what it is asked.
+
 ## Tools
+
+45 tools in eight groups. Names are prefixed `dw_` and grouped by the DW concept they act on. Read-only tools are marked as such via MCP annotations - see [Safety](#safety).
+
+### Typical sequences
+
+**A new item type, end to end.** Deploying XML does not touch the database, so the schema step is not optional:
+
+```
+dw_itemtype_create  →  dw_itemtype_sync_schema  →  dw_itemtype_health
+```
+
+**Populating content.** `set_fields` reads the item back and returns what it now holds, so a typo in a SystemName surfaces as an error listing the valid names rather than a silent no-op:
+
+```
+dw_page_create  →  dw_page_set_fields  →  (dw_page_get to confirm)
+```
+
+**Something these tools do not cover.** The Admin API has ~1800 endpoints; discovery reaches the rest:
+
+```
+dw_api_search "customer"  →  dw_api_endpoint_schema  →  dw_api_call
+```
 
 ### Item Types
 
@@ -418,6 +327,8 @@ Manage the PIM data model: product categories (groups of attributes) and product
 
 ## Field Type Aliases
 
+Item type fields and product fields use two unrelated type systems - editor class names for the former, integer `TypeId` for the latter. Both accept short aliases.
+
 ### Item type fields (`dw_field_save`, `dw_itemtype_create`)
 
 When creating fields, you can use short aliases instead of full .NET class names:
@@ -511,7 +422,8 @@ Numeric TypeId is also accepted directly. Use `dw_product_field_type_list` to fe
 
 ```
 src/
-  index.ts          Entry point - reads config from env, registers tools
+  index.ts          stdio entrypoint - reads env, applies process-level policy, connects the transport
+  server.ts         createServer() - registers every tool; no transport knowledge
   client.ts         DwClient - HTTP client for Admin API, Update API, Delivery API
   utils.ts          Shared Zod helpers (jsonParam, numParam) and response helpers (prop, pascal)
   tools/
@@ -543,4 +455,8 @@ npm run build    # Compile TypeScript
 npm run start    # Run compiled version
 ```
 
-After changes, run `npm run build` and restart Claude Code to pick up the new version.
+After changes, `npm run build` and restart your MCP client to pick up the new tool list.
+
+`server.ts` builds the server and `index.ts` connects stdio, so a second transport - Streamable HTTP, for ChatGPT and the Responses API - is a new entrypoint rather than a change to either. Adding a tool module means one import and one entry in the `registrars` array in `server.ts`; a new tool needs `annotations` alongside its description, or clients cannot tell whether it writes.
+
+The server version is read from `package.json`, so a release bumps one file.
